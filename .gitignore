@@ -1,0 +1,10 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Large raw dataset binaries (do not commit to git)
+*.parquet
+
+# Virtual environments
+venv/
+.env/

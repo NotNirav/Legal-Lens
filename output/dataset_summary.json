@@ -1,0 +1,23 @@
+{
+  "dataset_name": "Indian Court Decisions - Legal Q&A Corpus",
+  "source": "c:\\Users\\Khushi Kolhe\\OneDrive\\Documents\\Hackathon\\Hacktoberfest 2026\\Legal-Lens\\legal_rights_extraction\\sc_test.parquet",
+  "total_cases_scanned": 5019,
+  "total_qa_pairs": 1104,
+  "categories_breakdown": {
+    "Constitutional Law & Fundamental Rights": 346,
+    "General Legal Principles & Jurisprudence": 206,
+    "Criminal Law & Procedure": 162,
+    "Civil Procedure & Execution": 59,
+    "Corporate, Commercial & Arbitration": 28,
+    "Taxation & Revenue": 116,
+    "Contract & Specific Relief": 41,
+    "Family & Succession Law": 17,
+    "Property & Tenancy Law": 87,
+    "Evidence & Trial Procedure": 7,
+    "Labor, Employment & Service Law": 35
+  },
+  "format": [
+    "json",
+    "jsonl"
+  ]
+}
