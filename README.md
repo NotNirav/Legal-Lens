@@ -258,7 +258,7 @@ curl -s -X POST http://127.0.0.1:8000/retrieve \
 Legal Lens is architected with a modular adapter pattern that makes adding a new Act, Code, or State Regulation simple and repeatable:
 
 ### Step 1: Add Raw Markdown or Document
-Place your source text file in `rag_legal_markdown/` (e.g. `rag_legal_markdown/05_motor_vehicles_act.md`) or `data/`.
+Place your source text file in `data/source/markdown/` (e.g. `data/source/markdown/05_motor_vehicles_act.md`) or `data/source/raw/`.
 
 ### Step 2: Implement an Adapter in `scripts/normalize.py`
 Add an adapter function that parses sections, cleans running gazette headers, breaks long sections (>6,000 chars) into subparts (`-p1`, `-p2`), and constructs the canonical dictionary:
@@ -290,7 +290,12 @@ def adapt_my_new_act() -> List[Dict[str, Any]]:
 ### Step 3: Register in the Adapter Registry
 Register your new adapter in the `SOURCES` mapping in `scripts/normalize.py`:
 ```python
-SOURCES["motor_vehicles_act"] = adapt_my_new_act
+SOURCES["motor_vehicles_act"] = {
+    "name": "The Motor Vehicles Act, 1988",
+    "input_path": Path("data/source/markdown/05_motor_vehicles_act.md"),
+    "output_path": Path("data/processed/acts.jsonl"),
+    "adapter": adapt_my_new_act,
+}
 ```
 
 ### Step 4: Register Canonical Name in `rag/retrieve.py`
@@ -314,27 +319,12 @@ python eval/run_eval.py     # Confirms benchmark performance
 Legal-Lens/
 ├── README.md                                       # Master repository documentation (this file)
 ├── files.md                                        # Detailed index of all files, datasets & modules
-├── requirements.txt                                # Python runtime dependencies (includes fastapi, uvicorn)
+├── requirements.txt                                # Python runtime dependencies (includes fastapi, uvicorn, google-genai)
 ├── LICENSE                                         # MIT Open Source License
 │
 ├── api/                                            # REST API Service (FastAPI)
 │   ├── __init__.py                                 # API package initialization
 │   └── main.py                                     # Endpoints (/health, /sources, /retrieve), CORS & fail-safes
-│
-├── data/                                           # Constitutional & Statutory Source Data
-│   ├── COI.json                                    # Hierarchical JSON tree of Constitution of India
-│   ├── constitution_chunks.jsonl                   # Raw 519 Constitution chunk records
-│   ├── constitution_of_india.md                    # Master single-file Constitution markdown
-│   ├── README.md                                   # Comprehensive data directory documentation
-│   ├── markdown/                                   # 41 section-level markdown documents (Parts & Schedules)
-│   └── processed/                                  # Production RAG-ready datasets
-│       ├── constitution.jsonl                      # 519 normalized constitutional records (475 indexed)
-│       └── acts.jsonl                              # 218 normalized statutory records (123 indexed)
-│
-├── rag/                                            # Core Hybrid RAG Pipeline
-│   ├── __init__.py                                 # Package entry point
-│   ├── ingest.py                                   # ChromaDB batch embedding & upsert pipeline
-│   └── retrieve.py                                 # Hybrid search (Vector + BM25 + RRF + Section Collapsing)
 │
 ├── orchestrator/                                   # Answer Assembly & Reasoning Layer
 │   ├── __init__.py                                 # Package entry point
@@ -344,30 +334,51 @@ Legal-Lens/
 │   ├── web.py                                      # Google Search grounding & .gov.in domain filter
 │   └── show_prompt.py                              # Prompt preview CLI
 │
+├── rag/                                            # Core Hybrid RAG Pipeline
+│   ├── __init__.py                                 # Package entry point
+│   ├── ingest.py                                   # ChromaDB batch embedding & upsert pipeline
+│   └── retrieve.py                                 # Hybrid search (Vector + BM25 + RRF + Section Collapsing)
+│
 ├── eval/                                           # Evaluation & Benchmarking
 │   ├── questions.jsonl                             # 28 benchmark evaluation questions (EN & HI)
 │   └── run_eval.py                                 # Metric evaluator (Hit@1/3/5 & similarity distributions)
-│
-├── scripts/                                        # Utilities & Data Normalizers
-│   ├── normalize.py                                # Canonical schema adapter & statutory cleaner
-│   └── test_retrieval.py                           # Benchmark test runner
-│
-├── rag_legal_markdown/                             # Statutory Markdown Corpora
-│   ├── 01_central_acts.md                          # Parliamentary Acts (IRC 2020, RERA 2016)
-│   ├── 02_rules_regulations.md                     # Subordinate Legislation (Code on Wages Rules 2026)
-│   ├── 03_state_laws.md                            # State Laws (Maharashtra Rent Control Act 1999)
-│   └── 04_amendments_metadata.md                   # 891 Central Acts reference directory
 │
 ├── legal_rights_extraction/                        # Supreme Court NLP Extraction Engine
 │   ├── extract_legal_qa.py                         # Ratio decidendi & legal rights parser
 │   ├── search_qa.py                                # CLI search utility over court Q&As
 │   └── demo.py                                     # Interactive demo workflow
 │
-└── output/                                         # Extracted Case Law Datasets
-    ├── legal_qa_dataset.json                       # 1,104 verified Supreme Court Q&A pairs (JSON array)
-    ├── legal_qa_dataset.jsonl                      # 1,104 verified Supreme Court Q&A pairs (JSONL)
-    ├── dataset_summary.json                        # Metadata aggregate summary & domain statistics
-    └── README.md                                   # Court decisions dataset documentation
+├── data/                                           # Unified Legal Data Hub
+│   ├── README.md                                   # Comprehensive data hub documentation
+│   │
+│   ├── source/                                     # Source Materials & Reference Texts ("just data")
+│   │   ├── raw/                                    # Master source files & extractions
+│   │   │   ├── Indian Constitution.pdf             # Official pocket edition source PDF (402 pages)
+│   │   │   ├── COI.json                            # Hierarchical structured JSON tree
+│   │   │   └── constitution_chunks.jsonl           # Raw intermediate chunk dump (519 records)
+│   │   │
+│   │   └── markdown/                               # Verbatim statutory & constitutional markdown
+│   │       ├── constitution_of_india.md            # Complete master text of the Constitution
+│   │       ├── 01_central_acts.md                  # Parliamentary Acts (IRC 2020, RERA 2016)
+│   │       ├── 02_rules_regulations.md             # Subordinate Legislation (Code on Wages Central Rules)
+│   │       ├── 03_state_laws.md                    # State & Tenancy Laws (Maharashtra Rent Control Act)
+│   │       └── 04_amendments_metadata.md           # 891 Central Acts reference directory
+│   │
+│   ├── processed/                                  # Production RAG-Indexed Datasets (Final Output)
+│   │   ├── constitution.jsonl                      # 519 normalized constitutional records (475 indexed)
+│   │   └── acts.jsonl                              # 218 normalized statutory records (123 indexed)
+│   │
+│   └── extracted_qa/                               # Extracted Court Decisions Q&A Corpus (Final Output)
+│       ├── legal_qa_dataset.jsonl                  # 1,104 verified Supreme Court Q&A pairs (JSONL)
+│       ├── dataset_summary.json                    # Category distribution & extraction statistics
+│       └── README.md                               # Court decisions dataset documentation
+│
+└── scripts/                                        # Utilities & Data Normalizers
+    ├── normalize.py                                # Canonical schema adapter & statutory cleaner
+    ├── latency_test.py                             # Gemma 4 latency benchmark (streaming TTFT vs thinking)
+    ├── smoke_gemma.py                              # 6-point Gemma capability smoke test harness
+    ├── test_web.py                                 # Grounded web search & domain allowlist test suite
+    └── test_retrieval.py                           # Benchmark test runner
 ```
 
 ---

@@ -4,16 +4,49 @@ This directory houses the foundational legal knowledge base for **Legal Lens**, 
 
 ---
 
-## 📁 Dataset Directory Overview
+## 📁 Unified Data Hub Directory Structure
 
-| File / Folder | Format | Records / Size | Description |
-| :--- | :--- | :--- | :--- |
-| **`data/COI.json`** | Hierarchical JSON | ~1.48 MB | Complete structured tree of the Constitution: Preamble, 25 Parts, 23 Chapters, 503 Articles (with structured clauses and footnotes), 12 Schedules, and 3 Appendices. |
-| **`data/constitution_chunks.jsonl`** | JSON Lines | 519 chunks (~2.52 MB) | Raw RAG chunks extracted from the official PDF with hierarchical path metadata and raw search text. |
-| **`data/constitution_of_india.md`** | Master Markdown | ~0.89 MB | Full master text formatted with GitHub Flavored Markdown headings, blockquotes, tables, and amendment notes. |
-| **`data/markdown/`** | Modular Markdown | 41 files (~850 KB) | Granular markdown files split by section: Preamble (`00_preamble.md`), 25 Parts, 12 Schedules, and 3 Appendices. |
-| **`data/processed/constitution.jsonl`** | Canonical JSONL | 519 records (475 indexed) | **Production Constitutional Corpus**. Schema-normalized, footnote-repaired, with 70 line-break heading leaks fixed and active vs omitted flags. |
-| **`data/processed/acts.jsonl`** | Canonical JSONL | 218 records (123 indexed) | **Production Statutory Corpus**. Contains *The Maharashtra Rent Control Act, 1999* (MRCA) and *The Code on Wages (Central) Rules, 2026*, chunked by section/rule and subparts. |
+```text
+data/
+├── source/                                         # Source Materials & Reference Texts ("just data")
+│   ├── raw/                                        # Master source files & extractions
+│   │   ├── Indian Constitution.pdf                 # Official pocket edition source PDF (402 pages)
+│   │   ├── COI.json                                # Master hierarchical JSON tree
+│   │   └── constitution_chunks.jsonl               # Raw intermediate chunk dump (519 records)
+│   │
+│   └── markdown/                                   # Verbatim statutory & constitutional markdown
+│       ├── constitution_of_india.md                # Complete master text of the Constitution
+│       ├── 01_central_acts.md                      # Parliamentary Acts (IRC 2020, RERA 2016)
+│       ├── 02_rules_regulations.md                 # Subordinate Legislation (Code on Wages Rules 2026)
+│       ├── 03_state_laws.md                        # State & Tenancy Laws (Maharashtra Rent Control Act)
+│       └── 04_amendments_metadata.md               # 891 Central Acts reference directory
+│
+├── processed/                                      # Production RAG-Indexed Datasets (Final Output)
+│   ├── constitution.jsonl                          # 519 normalized constitutional records (475 indexed)
+│   └── acts.jsonl                                  # 218 normalized statutory records (123 indexed)
+│
+└── extracted_qa/                                   # Extracted Court Decisions Q&A Corpus (Final Output)
+    ├── legal_qa_dataset.jsonl                      # 1,104 verified Supreme Court Q&A pairs (JSONL)
+    ├── dataset_summary.json                        # Category distribution & extraction statistics
+    └── README.md                                   # Court decisions dataset documentation
+```
+
+### 📁 Dataset Directory Overview
+
+| File / Folder | Category | Format | Records / Size | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **`data/source/raw/Indian Constitution.pdf`** | Raw Source | PDF | 2.30 MB | Official Ministry of Law & Justice pocket edition source PDF (402 pages). |
+| **`data/source/raw/COI.json`** | Raw Source | JSON | ~1.48 MB | Complete structured tree of the Constitution: Preamble, 25 Parts, 23 Chapters, 503 Articles, 12 Schedules, 3 Appendices. |
+| **`data/source/raw/constitution_chunks.jsonl`** | Raw Source | JSON Lines | 519 chunks (~2.52 MB) | Raw intermediate RAG chunks extracted from the official PDF. |
+| **`data/source/markdown/constitution_of_india.md`** | Source Markdown | Markdown | ~0.89 MB | Full master text of the Constitution formatted with GFM headings, blockquotes, and tables. |
+| **`data/source/markdown/01_central_acts.md`** | Source Markdown | Markdown | ~350 KB | Primary Parliamentary Acts (Industrial Relations Code 2020, RERA 2016). |
+| **`data/source/markdown/02_rules_regulations.md`** | Source Markdown | Markdown | ~138 KB | Central Subordinate Legislation (Code on Wages Rules 2026, E-Commerce Rules). |
+| **`data/source/markdown/03_state_laws.md`** | Source Markdown | Markdown | ~300 KB | State Tenancy Laws (*The Maharashtra Rent Control Act, 1999*, MOFA 1963). |
+| **`data/source/markdown/04_amendments_metadata.md`** | Source Markdown | Markdown | ~76 KB | Master alphabetical reference directory of 891 Central Acts & legislative status. |
+| **`data/processed/constitution.jsonl`** | Final Output | Canonical JSONL | 519 records (475 indexed) | **Production Constitutional Corpus**. Schema-normalized, footnote-repaired, with active vs omitted flags. |
+| **`data/processed/acts.jsonl`** | Final Output | Canonical JSONL | 218 records (123 indexed) | **Production Statutory Corpus**. Contains MRCA 1999 and Code on Wages Rules 2026, chunked by section/rule and subparts. |
+| **`data/extracted_qa/legal_qa_dataset.jsonl`** | Final Output | Canonical JSONL | 1,104 Q&A pairs (~1.45 MB) | **Supreme Court Case Law Corpus**. Cleaned *ratio decidendi* and statutory interpretations across 11 domains. |
+| **`data/extracted_qa/dataset_summary.json`** | Final Output | JSON | ~810 B | Extraction statistics, category distribution, and domain summary. |
 
 ---
 

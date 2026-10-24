@@ -459,7 +459,8 @@ def process_dataset(
 if __name__ == '__main__':
     base_dir = os.path.dirname(os.path.abspath(__file__))
     default_parquet = os.path.join(base_dir, 'sc_test.parquet')
-    out_dir = os.path.join(base_dir, 'output')
+    root_dir = os.path.dirname(base_dir)
+    out_dir = os.path.join(root_dir, 'data', 'extracted_qa') if os.path.exists(os.path.join(root_dir, 'data', 'extracted_qa')) else os.path.join(base_dir, 'output')
 
     if os.path.exists(default_parquet):
         process_dataset(default_parquet, out_dir)

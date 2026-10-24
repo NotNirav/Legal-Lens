@@ -998,17 +998,22 @@ def adapt_acts(
 # Registry of Supported Sources
 # ==============================================================================
 
+def _resolve_source_path(new_rel: str, old_rel: str) -> Path:
+    p_new = Path(new_rel)
+    return p_new if p_new.exists() else Path(old_rel)
+
+
 SOURCES: Dict[str, Dict[str, Any]] = {
     "constitution": {
         "name": "Constitution of India",
-        "input_path": Path("data/constitution_chunks.jsonl"),
-        "coi_path": Path("data/COI.json"),
+        "input_path": _resolve_source_path("data/source/raw/constitution_chunks.jsonl", "data/constitution_chunks.jsonl"),
+        "coi_path": _resolve_source_path("data/source/raw/COI.json", "data/COI.json"),
         "output_path": Path("data/processed/constitution.jsonl"),
         "adapter": adapt_constitution,
     },
     "acts": {
         "name": "Statutory Acts & Rules",
-        "input_path": Path("rag_legal_markdown/03_state_laws.md"),
+        "input_path": _resolve_source_path("data/source/markdown/03_state_laws.md", "rag_legal_markdown/03_state_laws.md"),
         "output_path": Path("data/processed/acts.jsonl"),
         "adapter": adapt_acts,
     },

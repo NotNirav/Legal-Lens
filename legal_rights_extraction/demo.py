@@ -18,7 +18,8 @@ def main():
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     local_sc_parquet = os.path.join(base_dir, "sc_test.parquet")
-    output_dir = os.path.join(base_dir, "output")
+    root_dir = os.path.dirname(base_dir)
+    output_dir = os.path.join(root_dir, "data", "extracted_qa")
 
     # 1. Dataset Selection
     if os.path.exists(local_sc_parquet):

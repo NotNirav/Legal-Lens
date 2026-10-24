@@ -8,9 +8,8 @@ This directory contains the extracted, cleaned, and categorized legal Questions 
 
 | File | Format | Description |
 | :--- | :--- | :--- |
-| [`legal_qa_dataset.json`](file:///c:/Users/Khushi%20Kolhe/OneDrive/Documents/Hackathon/Hacktoberfest%202026/Legal-Lens/legal_rights_extraction/output/legal_qa_dataset.json) | JSON Array | Complete structured dataset with all metadata, categories, and references. |
-| [`legal_qa_dataset.jsonl`](file:///c:/Users/Khushi%20Kolhe/OneDrive/Documents/Hackathon/Hacktoberfest%202026/Legal-Lens/legal_rights_extraction/output/legal_qa_dataset.jsonl) | JSON Lines | Line-delimited JSON format for batch embedding and vector DB ingestion. |
-| [`dataset_summary.json`](file:///c:/Users/Khushi%20Kolhe/OneDrive/Documents/Hackathon/Hacktoberfest%202026/Legal-Lens/legal_rights_extraction/output/dataset_summary.json) | JSON | Aggregate metadata summary and domain distribution. |
+| `legal_qa_dataset.jsonl` | JSON Lines | Canonical line-delimited JSON format (1,104 records) for high-performance streaming, batch embedding, and vector DB ingestion. |
+| `dataset_summary.json` | JSON | Aggregate metadata summary, domain distribution, and extraction statistics. |
 
 ---
 
@@ -59,7 +58,7 @@ import json
 from langchain_core.documents import Document
 
 documents = []
-with open("legal_rights_extraction/output/legal_qa_dataset.jsonl", "r", encoding="utf-8") as f:
+with open("data/extracted_qa/legal_qa_dataset.jsonl", "r", encoding="utf-8") as f:
     for line in f:
         data = json.loads(line)
         doc = Document(

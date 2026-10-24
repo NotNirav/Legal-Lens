@@ -13,10 +13,14 @@ import re
 
 def search_dataset(query: str, top_k: int = 5):
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(base_dir)
     candidates = [
+        os.path.join(root_dir, "data", "extracted_qa", "legal_qa_dataset.jsonl"),
+        os.path.join(root_dir, "data", "extracted_qa", "legal_qa_dataset.json"),
+        os.path.join(base_dir, "output", "legal_qa_dataset.jsonl"),
         os.path.join(base_dir, "output", "legal_qa_dataset.json"),
-        os.path.join(base_dir, "legal_qa_dataset.json"),
-        os.path.join(os.path.dirname(base_dir), "output", "legal_qa_dataset.json")
+        os.path.join(root_dir, "output", "legal_qa_dataset.jsonl"),
+        os.path.join(root_dir, "output", "legal_qa_dataset.json"),
     ]
     json_path = None
     for cand in candidates:
@@ -29,7 +33,10 @@ def search_dataset(query: str, top_k: int = 5):
         return
 
     with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+        if json_path.endswith('.jsonl'):
+            data = [json.loads(line) for line in f if line.strip()]
+        else:
+            data = json.load(f)
 
     keywords = [kw.lower() for kw in re.findall(r'\b[a-zA-Z0-9_]+\b', query) if len(kw) > 2]
     if not keywords:
