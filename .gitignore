@@ -1,7 +1,7 @@
 # ChromaDB local vector storage
 chroma_db/
 
-# Python cache & build files
+# Python & Node cache & build files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,6 +13,7 @@ venv/
 build/
 dist/
 *.egg-info/
+node_modules/
 
 # Large raw dataset binaries (do not commit to git)
 *.parquet
