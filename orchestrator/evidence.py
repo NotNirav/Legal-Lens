@@ -2,22 +2,29 @@
 """
 evidence.py - Evidence aggregation layer for Legal Lens.
 
-Retrieves verified legal chunks, detects query language, tags evidence sources,
-and flags confidence status without making any LLM calls.
+Calls tiered retrieval (rag.retrieve.retrieve_tiered), aggregates statutory,
+constitutional, state law, Q&A, grounded web, and uploaded document facts into
+a tagged flat evidence list:
+  [C1].. Constitution of India
+  [L1].. Central statutory law
+  [S1].. State-specific statutory law
+  [Q1].. Authoritative Q&A / Case summaries
+  [W1].. Grounded web findings
+  [D1].. Uploaded user document facts
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Ensure project root in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from rag.retrieve import retrieve
+from rag.retrieve import retrieve_tiered
 
 
 def detect_query_language(text: str) -> str:
@@ -35,70 +42,310 @@ def detect_query_language(text: str) -> str:
     return "hi" if ratio > 0.3 else "en"
 
 
-def build_evidence(query: str, k: int = 5, sources: list[str] | None = None) -> Dict[str, Any]:
+def _truncate_text(text: str, max_chars: int = 1500) -> str:
+    """Truncates text cleanly to approximately max_chars."""
+    s = (text or "").strip()
+    if len(s) > max_chars:
+        return s[:max_chars].rstrip() + "..."
+    return s
+
+
+class EvidenceList(list):
     """
-    Builds the structured evidence payload for answer assembly.
-
-    Calls rag.retrieve.retrieve(query, k=k) and returns:
-    {
-        "lang": "hi" or "en",
-        "law": [chunks tagged [L1], [L2]...],
-        "qa": [],
-        "web": [],
-        "any_confident": bool
-    }
-
-    Each chunk in law preserves:
-      - tag: "[L1]", "[L2]", ...
-      - id: section-level ID
-      - citation: canonical citation string
-      - title: section title
-      - text: verbatim/concatenated statutory text
-      - status: statutory status (e.g. 'In Force')
-      - text_as_on: consolidation date
-      - part_title: part / chapter title (e.g. 'Part III - Fundamental Rights')
-      - confident: boolean indicating if similarity >= MIN_SIMILARITY
-      - similarity: float cosine similarity or None
-      - score: RRF score
-      - matched_parts: list of individual chunk part IDs
+    Flat list of evidence items with backwards-compatible dictionary access
+    and convenience metadata attributes (any_confident, lang, state).
     """
-    lang = detect_query_language(query)
-    raw_results = retrieve(query=query, k=k, sources=sources)
 
-    law_chunks: List[Dict[str, Any]] = []
-    for idx, r in enumerate(raw_results, 1):
-        chunk = {
-            "tag": f"[L{idx}]",
-            "id": r.get("id"),
-            "citation": r.get("citation"),
-            "title": r.get("title"),
-            "text": r.get("text", ""),
+    def __init__(
+        self,
+        items: Optional[List[Dict[str, Any]]] = None,
+        any_confident: bool = False,
+        lang: str = "en",
+        state: Optional[str] = None,
+        tiered_raw: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(items or [])
+        self.any_confident = any_confident
+        self.lang = lang
+        self.state = state
+        self.tiered_raw = tiered_raw or {}
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except (KeyError, TypeError):
+            return default
+
+    def __getitem__(self, item: Any) -> Any:
+        if isinstance(item, str):
+            if item == "any_confident":
+                return self.any_confident
+            if item == "lang":
+                return self.lang
+            if item == "state":
+                return self.state
+            if item == "law":
+                return [x for x in self if str(x.get("tag", "")).startswith(("[C", "[L", "[S"))]
+            if item == "constitution":
+                return [x for x in self if str(x.get("tag", "")).startswith("[C")]
+            if item == "central":
+                return [x for x in self if str(x.get("tag", "")).startswith("[L")]
+            if item == "state_law":
+                return [x for x in self if str(x.get("tag", "")).startswith("[S")]
+            if item == "qa":
+                return [x for x in self if str(x.get("tag", "")).startswith("[Q")]
+            if item == "web":
+                return [x for x in self if str(x.get("tag", "")).startswith("[W")]
+            if item == "doc":
+                return [x for x in self if str(x.get("tag", "")).startswith("[D")]
+            raise KeyError(f"Invalid EvidenceList key: {item}")
+        return super().__getitem__(item)
+
+
+def format_tiered_evidence(
+    tiered: Dict[str, Any],
+    web: Any = None,
+    doc: Any = None,
+    state: Optional[str] = None,
+    lang: str = "en",
+) -> EvidenceList:
+    """
+    Transforms raw tiered retrieval results and web/doc findings into a flat EvidenceList.
+    """
+    flat_items: List[Dict[str, Any]] = []
+
+    # 1. Constitution [C1]..
+    for idx, r in enumerate(tiered.get("constitution", []), 1):
+        source = r.get("source") or "Constitution of India"
+        section = r.get("section") or ""
+        citation = r.get("citation") or f"{source}, {section}".strip(", ")
+        flat_items.append({
+            "tag": f"[C{idx}]",
+            "source": source,
+            "section": section,
+            "citation": citation,
+            "text": _truncate_text(r.get("text", "")),
             "status": r.get("status") or "In Force",
             "text_as_on": r.get("text_as_on") or "",
+            "jurisdiction": r.get("jurisdiction") or "India",
+            "url": r.get("url") or "",
             "part_title": r.get("part_title"),
             "confident": bool(r.get("confident", False)),
             "similarity": r.get("similarity"),
-            "score": r.get("score"),
-            "matched_parts": r.get("matched_parts", []),
-        }
-        law_chunks.append(chunk)
+            "tier": "constitution",
+        })
 
-    any_confident = any(c["confident"] for c in law_chunks)
+    # 2. Central Law [L1]..
+    for idx, r in enumerate(tiered.get("central", []), 1):
+        source = r.get("source") or "Central Act"
+        section = r.get("section") or ""
+        citation = r.get("citation") or f"{source}, {section}".strip(", ")
+        flat_items.append({
+            "tag": f"[L{idx}]",
+            "source": source,
+            "section": section,
+            "citation": citation,
+            "text": _truncate_text(r.get("text", "")),
+            "status": r.get("status") or "In Force",
+            "text_as_on": r.get("text_as_on") or "",
+            "jurisdiction": r.get("jurisdiction") or "India",
+            "url": r.get("url") or "",
+            "part_title": r.get("part_title"),
+            "confident": bool(r.get("confident", False)),
+            "similarity": r.get("similarity"),
+            "tier": "central",
+        })
 
-    return {
-        "lang": lang,
-        "law": law_chunks,
-        "qa": [],
-        "web": [],
-        "any_confident": any_confident,
-    }
+    # 3. State Law [S1]..
+    for idx, r in enumerate(tiered.get("state", []), 1):
+        source = r.get("source") or "State Act"
+        section = r.get("section") or ""
+        citation = r.get("citation") or f"{source}, {section}".strip(", ")
+        flat_items.append({
+            "tag": f"[S{idx}]",
+            "source": source,
+            "section": section,
+            "citation": citation,
+            "text": _truncate_text(r.get("text", "")),
+            "status": r.get("status") or "In Force",
+            "text_as_on": r.get("text_as_on") or "",
+            "jurisdiction": r.get("jurisdiction") or (state or "State"),
+            "url": r.get("url") or "",
+            "part_title": r.get("part_title"),
+            "confident": bool(r.get("confident", False)),
+            "similarity": r.get("similarity"),
+            "tier": "state",
+        })
+
+    # 4. Authoritative Q&A [Q1]..
+    for idx, r in enumerate(tiered.get("qa", []), 1):
+        qa_text = r.get("text") or f"Q: {r.get('question', '')}\nA: {r.get('answer', '')}"
+        source = r.get("case_title") or r.get("source") or "Authoritative Q&A"
+        citation = r.get("citation") or f"{source} {idx}"
+        flat_items.append({
+            "tag": f"[Q{idx}]",
+            "source": source,
+            "section": r.get("section") or "",
+            "citation": citation,
+            "text": _truncate_text(qa_text),
+            "status": r.get("status") or "Authoritative Q&A",
+            "text_as_on": r.get("text_as_on") or "",
+            "jurisdiction": r.get("jurisdiction") or "India",
+            "url": r.get("url") or "",
+            "part_title": r.get("part_title"),
+            "tier": "qa",
+        })
+
+    # 5. Web Findings [W1]..
+    if web:
+        if isinstance(web, dict):
+            findings = web.get("findings", "")
+            sources = web.get("sources", [])
+            if findings:
+                url = sources[0].get("url", "") if sources else ""
+                cit = sources[0].get("title", "Official Web Search") if sources else "Official Web Search"
+                flat_items.append({
+                    "tag": "[W1]",
+                    "source": "Official Web Search",
+                    "section": "",
+                    "citation": cit,
+                    "text": _truncate_text(findings),
+                    "status": "Untrusted Web Data",
+                    "text_as_on": "Current",
+                    "jurisdiction": "Web",
+                    "url": url,
+                    "tier": "web",
+                })
+        elif isinstance(web, list):
+            for idx, w in enumerate(web, 1):
+                if isinstance(w, dict):
+                    cit = w.get("citation") or w.get("title") or f"Web Source {idx}"
+                    txt = w.get("text") or w.get("snippet") or w.get("findings") or ""
+                    status = w.get("status") or "Untrusted Web Data"
+                    text_as_on = w.get("text_as_on") or ""
+                    jur = w.get("jurisdiction") or "Web"
+                    url = w.get("url") or ""
+                else:
+                    cit = f"Web Source {idx}"
+                    txt = str(w)
+                    status = "Untrusted Web Data"
+                    text_as_on = ""
+                    jur = "Web"
+                    url = ""
+                flat_items.append({
+                    "tag": f"[W{idx}]",
+                    "source": "Official Web Search",
+                    "section": "",
+                    "citation": cit,
+                    "text": _truncate_text(txt),
+                    "status": status,
+                    "text_as_on": text_as_on,
+                    "jurisdiction": jur,
+                    "url": url,
+                    "tier": "web",
+                })
+        elif isinstance(web, str) and web.strip():
+            flat_items.append({
+                "tag": "[W1]",
+                "source": "Official Web Search",
+                "section": "",
+                "citation": "Official Web Search",
+                "text": _truncate_text(web),
+                "status": "Untrusted Web Data",
+                "text_as_on": "Current",
+                "jurisdiction": "Web",
+                "url": "",
+                "tier": "web",
+            })
+
+    # 6. Uploaded Document Facts [D1]..
+    if doc:
+        if isinstance(doc, list):
+            for idx, d in enumerate(doc, 1):
+                if isinstance(d, dict):
+                    cit = d.get("citation") or d.get("title") or f"Document Fact {idx}"
+                    txt = d.get("text") or d.get("fact") or ""
+                    status = d.get("status") or "User Document Data"
+                    text_as_on = d.get("text_as_on") or ""
+                    jur = d.get("jurisdiction") or "User Document"
+                    url = d.get("url") or ""
+                else:
+                    cit = f"Document Fact {idx}"
+                    txt = str(d)
+                    status = "User Document Data"
+                    text_as_on = ""
+                    jur = "User Document"
+                    url = ""
+                flat_items.append({
+                    "tag": f"[D{idx}]",
+                    "source": "Uploaded Document",
+                    "section": "",
+                    "citation": cit,
+                    "text": _truncate_text(txt),
+                    "status": status,
+                    "text_as_on": text_as_on,
+                    "jurisdiction": jur,
+                    "url": url,
+                    "tier": "doc",
+                })
+        elif isinstance(doc, (str, bytes)):
+            txt = doc.decode("utf-8", errors="replace") if isinstance(doc, bytes) else doc
+            if txt.strip():
+                flat_items.append({
+                    "tag": "[D1]",
+                    "source": "Uploaded Document",
+                    "section": "",
+                    "citation": "Uploaded Document",
+                    "text": _truncate_text(txt),
+                    "status": "User Document Data",
+                    "text_as_on": "",
+                    "jurisdiction": "User Document",
+                    "url": "",
+                    "tier": "doc",
+                })
+
+    any_confident = bool(tiered.get("any_confident", False))
+
+    return EvidenceList(
+        items=flat_items,
+        any_confident=any_confident,
+        lang=lang,
+        state=state,
+        tiered_raw=tiered,
+    )
+
+
+def build_evidence(
+    query: str,
+    state: Optional[str] = None,
+    web: Any = None,
+    doc: Any = None,
+    **kwargs: Any,
+) -> EvidenceList:
+    """
+    Builds the flat structured evidence list for Legal Lens reasoning.
+    """
+    # Guard against legacy positional calls passing k as state
+    if isinstance(state, int):
+        state = None
+
+    lang = detect_query_language(query)
+    tiered = retrieve_tiered(query=query, state=state)
+
+    return format_tiered_evidence(
+        tiered=tiered,
+        web=web,
+        doc=doc,
+        state=state,
+        lang=lang,
+    )
 
 
 if __name__ == "__main__":
     test_q = "can my landlord throw me out without notice"
-    evidence = build_evidence(test_q)
+    evidence = build_evidence(test_q, state="Maharashtra")
     print(f"Query: \"{test_q}\"")
-    print(f"Detected Lang: {evidence['lang']} | Any Confident: {evidence['any_confident']}")
-    print(f"Law chunks retrieved: {len(evidence['law'])}")
-    for chunk in evidence["law"]:
-        print(f"  {chunk['tag']}: {chunk['citation']} | Confident: {chunk['confident']} | Sim: {chunk['similarity']}")
+    print(f"Detected Lang: {evidence.lang} | Any Confident: {evidence.any_confident}")
+    print(f"Flat items returned: {len(evidence)}")
+    for item in evidence:
+        print(f"  {item['tag']} ({item['jurisdiction']}): {item['citation']} | {item['source']} | {item['section']}")

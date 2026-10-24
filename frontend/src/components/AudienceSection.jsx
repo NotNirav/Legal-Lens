@@ -1,10 +1,9 @@
 import React from 'react';
 import { 
   Shield, Home, Briefcase, ShoppingBag, 
-  ArrowRight, BookOpen, Sparkles 
+  ArrowRight, BookOpen 
 } from 'lucide-react';
 import { TARGET_AUDIENCES } from '../data/citizenRights';
-import { translations } from '../data/translations';
 
 const ICON_MAP = {
   Shield: Shield,
@@ -13,8 +12,7 @@ const ICON_MAP = {
   ShoppingBag: ShoppingBag
 };
 
-export default function AudienceSection({ onSelectAudience, language = 'en' }) {
-  const t = translations[language] || translations.en;
+export default function AudienceSection({ onSelectAudience }) {
 
   return (
     <section id="audiences" className="bento-audiences-section">

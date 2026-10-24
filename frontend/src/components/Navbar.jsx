@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Globe, Sun, Moon, ArrowRight, Sparkles, 
-  ChevronDown, Check, Menu, X, Shield 
+  ChevronDown, Check, Menu, X 
 } from 'lucide-react';
 import { translations } from '../data/translations';
 
@@ -20,7 +20,10 @@ export default function Navbar({
   language, 
   setLanguage,
   theme = 'dark',
-  toggleTheme
+  toggleTheme,
+  hasDemoParam = false,
+  isDemoModeActive = false,
+  setIsDemoModeActive
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
@@ -106,6 +109,22 @@ export default function Navbar({
 
           {/* Right Action Cluster: Theme Switcher + Language Dropdown + CTA */}
           <div className="nav-actions-cluster">
+            {/* Demo Mode Toggle Switch (Visible only if ?demo=1 in URL) */}
+            {hasDemoParam && (
+              <button
+                type="button"
+                className={`demo-mode-toggle-btn ${isDemoModeActive ? 'active' : ''}`}
+                onClick={() => setIsDemoModeActive && setIsDemoModeActive(!isDemoModeActive)}
+                title={isDemoModeActive ? "Demo Mode Active (Golden Questions enabled)" : "Enable Demo Mode"}
+                aria-pressed={isDemoModeActive}
+              >
+                <span className="demo-mode-switch-track">
+                  <span className="demo-mode-switch-thumb" />
+                </span>
+                <span className="demo-mode-label">Demo Mode</span>
+              </button>
+            )}
+
             {/* Dark / Light Mode Toggle */}
             <button
               type="button"
@@ -217,6 +236,22 @@ export default function Navbar({
               </button>
 
               <div className="mobile-drawer-footer">
+                {hasDemoParam && (
+                  <div className="mobile-demo-row">
+                    <span className="mobile-demo-text">Demo Mode (Golden Questions)</span>
+                    <button
+                      type="button"
+                      className={`demo-mode-toggle-btn ${isDemoModeActive ? 'active' : ''}`}
+                      onClick={() => setIsDemoModeActive && setIsDemoModeActive(!isDemoModeActive)}
+                      aria-pressed={isDemoModeActive}
+                    >
+                      <span className="demo-mode-switch-track">
+                        <span className="demo-mode-switch-thumb" />
+                      </span>
+                      <span className="demo-mode-label">{isDemoModeActive ? 'ON' : 'OFF'}</span>
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   className="btn btn-primary w-full"

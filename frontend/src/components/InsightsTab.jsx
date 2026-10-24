@@ -3,8 +3,8 @@ import {
   Search, ChevronDown, ChevronUp, ExternalLink, 
   Scale, BookOpen, Building2, Phone, CheckCircle, 
   AlertCircle, ArrowRight, X, Sparkles, RefreshCw, 
-  RotateCcw, Compass, Sun, Shield, Feather, ChevronLeft, ChevronRight,
-  Car, Home, Briefcase, FileText, ShoppingBag, Award
+  RotateCcw, Sun, Feather, ChevronLeft, ChevronRight,
+  Car, Home, Briefcase, ShoppingBag, Award
 } from 'lucide-react';
 import { searchKnowledgeBase } from '../services/ragService';
 import { translations } from '../data/translations';

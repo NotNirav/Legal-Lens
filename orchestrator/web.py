@@ -2,7 +2,7 @@
 """
 web.py - Grounded web search evidence module for Legal Lens.
 
-Performs live Google Search Grounding using gemma-4-26b-a4b-it to discover:
+Performs live Google Search Grounding using gemma-4-26b-a4b-it via orchestrator/llm.py to discover:
 - Current legal amendments, repeals, and replacements
 - Practical official steps, helplines, and government portals
 
@@ -16,8 +16,8 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 # Ensure project root in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -25,19 +25,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from google.genai import types
-from orchestrator.llm import get_client
+from orchestrator.llm import generate
 
 WEB_SEARCH_SYSTEM_PROMPT = (
-    "Find what CURRENT official sources say about this Indian legal question: "
-    "whether the relevant law has been amended, repealed or replaced, and practical "
-    "steps (where to file, helplines, official portals). Report only facts found; "
-    "list sources; do not give legal advice."
+    "Find what CURRENT official Indian sources say about this legal question: "
+    "whether the relevant law was amended, repealed or replaced, and practical "
+    "steps (where to file, official portals). Report only facts found, list sources, "
+    "do not give legal advice."
 )
 
 OFFICIAL_ALLOWLIST = {
     "indiacode.nic.in",
     "sci.gov.in",
-    "main.sci.gov.in",
     "egazette.gov.in",
     "legislative.gov.in",
     "nalsa.gov.in",
@@ -48,20 +47,27 @@ OFFICIAL_ALLOWLIST = {
 
 HARD_TIMEOUT_SECONDS = 10.0
 
+# Kept in memory for debugging inspection only, never returned in user output
+LAST_DROPPED_SOURCES: List[Dict[str, str]] = []
+
 
 def _extract_domain(title: str, uri: str) -> str:
     """
     Extracts the source domain from grounding metadata.
 
-    Google GenAI search grounding typically sets title to the source domain
-    (e.g., 'pib.gov.in') when uri is a vertex redirect link, or uri contains
-    the direct hostname.
+    Google GenAI search grounding sets title to the source domain (e.g., 'pib.gov.in')
+    when uri is a vertex redirect link, or uri contains the direct hostname.
     """
-    # 1. Check uri netloc if not google redirect
     if uri:
         try:
             parsed = urlparse(uri)
             netloc = parsed.netloc.lower()
+            if "google.com" in netloc and "/url" in parsed.path:
+                qs = parse_qs(parsed.query)
+                if "q" in qs and qs["q"]:
+                    target = urlparse(qs["q"][0]).netloc.lower()
+                    if target:
+                        netloc = target
             if netloc and not netloc.endswith("google.com"):
                 if ":" in netloc:
                     netloc = netloc.split(":")[0]
@@ -69,19 +75,16 @@ def _extract_domain(title: str, uri: str) -> str:
         except Exception:
             pass
 
-    # 2. Check title
     t = (title or "").strip().lower()
     if t:
-        # Strip scheme / path if title was formatted as a URL
         t_clean = t.replace("http://", "").replace("https://", "").split("/")[0].strip()
         if ":" in t_clean:
             t_clean = t_clean.split(":")[0]
         if "." in t_clean and " " not in t_clean:
             return t_clean
-        # Search for domain pattern in title words
         for word in t.split():
             w = word.strip("(),;:'\"[]{}")
-            if "." in w and (w.endswith(".in") or w.endswith(".org") or w.endswith(".com") or w.endswith(".net") or w.endswith(".edu")):
+            if "." in w and (w.endswith(".in") or w.endswith(".gov") or w.endswith(".org") or w.endswith(".nic")):
                 if ":" in w:
                     w = w.split(":")[0]
                 return w
@@ -92,7 +95,9 @@ def _extract_domain(title: str, uri: str) -> str:
 
 def _is_official_domain(domain: str) -> bool:
     """
-    Validates if a domain ends in .gov.in, .nic.in, or matches the official allowlist.
+    Validates if a domain ends in .gov.in, .nic.in, or matches the official allowlist:
+    indiacode.nic.in, sci.gov.in, egazette.gov.in, legislative.gov.in,
+    nalsa.gov.in, doj.gov.in, consumerhelpline.gov.in, edaakhil.nic.in.
     """
     d = domain.lower().strip()
     if not d:
@@ -114,63 +119,82 @@ def _is_official_domain(domain: str) -> bool:
 
 def web_evidence(
     query: str,
+    state: Optional[str] = None,
     lang: str = "en",
     timeout: float = HARD_TIMEOUT_SECONDS,
 ) -> Dict[str, Any]:
     """
-    Fetches official web evidence using Gemma 4 with Google Search Grounding.
+    Fetches official web evidence using gemma-4-26b-a4b-it via orchestrator/llm.py
+    with the Google Search tool.
+
+    URLs are extracted exclusively from grounding metadata, never from model text.
+    Filters sources to official .gov.in, .nic.in and allowlist domains.
+    Applies a hard timeout (10 seconds default). On timeout, error or empty result,
+    returns ok=False with empty findings so the pipeline continues without web.
 
     Returns:
     {
-        "findings": str,                  # Grounded factual findings (untrusted data)
-        "sources": [{"title", "url", "domain"}], # Kept official sources (.gov.in, .nic.in, allowlist)
-        "dropped_sources": [...],         # Filtered out non-official sources (for debugging)
-        "ok": bool                        # True if successful, False on timeout / error
+        "ok": bool,
+        "findings": str,
+        "sources": [{"title": str, "url": str, "domain": str}],
+        "latency": float
     }
     """
+    global LAST_DROPPED_SOURCES
     start_time = time.perf_counter()
 
+    # Backwards compatibility: handle if 2nd positional arg was lang (e.g. 'en', 'hi')
+    if state in ["en", "hi"] and lang == "en":
+        lang = state
+        state = None
+
+    effective_timeout = float(timeout) if timeout else HARD_TIMEOUT_SECONDS
+
     try:
-        client = get_client()
+        user_content = query
+        if state:
+            user_content = f"{query}\nState jurisdiction: {state}"
+        if lang == "hi":
+            user_content += "\n(Please respond in simple Hindi while citing official Indian portals/statutes)"
 
-        # Build config with Google Search tool and hard timeout
-        # Using ThinkingLevel.MINIMAL minimizes thinking latency to fit within timeout
-        cfg = types.GenerateContentConfig(
-            system_instruction=WEB_SEARCH_SYSTEM_PROMPT,
-            tools=[types.Tool(google_search=types.GoogleSearch())],
-            http_options=types.HttpOptions(timeout=int(timeout * 1000)),
-            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL),
-            temperature=0.1,
-        )
+        search_tool = types.Tool(google_search=types.GoogleSearch())
 
-        user_content = query if lang != "hi" else f"{query}\n(Please respond in Hindi while citing official Indian portals/statutes)"
-
-        response = client.models.generate_content(
+        response = generate(
             model="gemma-4-26b-a4b-it",
-            contents=user_content,
-            config=cfg,
+            system=WEB_SEARCH_SYSTEM_PROMPT,
+            user=user_content,
+            tools=[search_tool],
+            timeout=int(effective_timeout),
+            thinking_level=None,
+            temperature=0.1,
+            return_raw=True,
         )
 
         elapsed = time.perf_counter() - start_time
-        if elapsed > timeout:
-            # Enforce timeout boundary
+        if elapsed > effective_timeout or response is None:
             return {
+                "ok": False,
                 "findings": "",
                 "sources": [],
-                "dropped_sources": [],
-                "ok": False,
+                "latency": round(elapsed, 3),
             }
 
         findings_text = (response.text or "").strip()
+        if not findings_text:
+            return {
+                "ok": False,
+                "findings": "",
+                "sources": [],
+                "latency": round(elapsed, 3),
+            }
 
-        # Parse grounding metadata
         grounding_meta = None
         if response.candidates:
             grounding_meta = getattr(response.candidates[0], "grounding_metadata", None)
 
         kept_sources: List[Dict[str, str]] = []
         dropped_sources: List[Dict[str, str]] = []
-        seen_urls = set()
+        seen_keys = set()
 
         if grounding_meta:
             chunks = getattr(grounding_meta, "grounding_chunks", []) or []
@@ -189,31 +213,32 @@ def web_evidence(
                     "domain": domain,
                 }
 
-                # Deduplicate by url/title
                 key = (domain, raw_uri)
-                if key in seen_urls:
+                if key in seen_keys:
                     continue
-                seen_urls.add(key)
+                seen_keys.add(key)
 
                 if _is_official_domain(domain):
                     kept_sources.append(source_item)
                 else:
                     dropped_sources.append(source_item)
 
+        LAST_DROPPED_SOURCES = dropped_sources
+
         return {
+            "ok": True,
             "findings": findings_text,
             "sources": kept_sources,
-            "dropped_sources": dropped_sources,
-            "ok": True,
+            "latency": round(elapsed, 3),
         }
 
     except Exception:
-        # On timeout (504 DEADLINE_EXCEEDED) or any client error, fail cleanly
+        elapsed = time.perf_counter() - start_time
         return {
+            "ok": False,
             "findings": "",
             "sources": [],
-            "dropped_sources": [],
-            "ok": False,
+            "latency": round(elapsed, 3),
         }
 
 
@@ -221,7 +246,6 @@ if __name__ == "__main__":
     test_q = "has the Indian Penal Code been replaced"
     print(f"Testing web_evidence for: \"{test_q}\"")
     res = web_evidence(test_q)
-    print("OK:", res["ok"])
-    print("Kept sources:", len(res["sources"]))
-    print("Dropped sources:", len(res["dropped_sources"]))
-    print("Findings (preview):", res["findings"][:200])
+    print("ok:", res["ok"])
+    print("kept domains:", [s["domain"] for s in res["sources"]])
+    print("latency:", res["latency"])

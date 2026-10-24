@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-llm.py - Lightweight wrapper around the google-genai SDK for Gemma.
+llm.py - Wrapper around the google-genai SDK for Legal Lens.
 
-Configured for model 'gemma-4-26b-a4b-it'. Reads GEMINI_API_KEY from .env,
-supports non-streaming and streaming generation, structured JSON, thinking level control,
-automatic single retry on 429/500/504 with a 3-second pause, and clean error raising.
+Configured for Gemma models with model and timeout settings from orchestrator.config.
+Reads Gemini/Gemma API keys safely from environment or .env without printing or logging them.
+Supports non-streaming and streaming generation, structured JSON, thinking level control,
+tools (Google Search), multimodal/image inputs, single retry on 429/500/504 with a 3-second pause,
+and clean error raising.
 """
 
 from __future__ import annotations
@@ -23,7 +25,16 @@ if str(PROJECT_ROOT) not in sys.path:
 from google import genai
 from google.genai import types
 
-DEFAULT_MODEL = "gemma-4-26b-a4b-it"
+from orchestrator.config import (
+    DEFAULT_MODEL,
+    REVIEWER_MODEL,
+    REVIEWER_TIMEOUT,
+    TIMEOUTS,
+    VISION_MODEL,
+    VISION_TIMEOUT,
+    WRITER_MODEL,
+    WRITER_TIMEOUT,
+)
 
 
 class LLMError(Exception):
@@ -32,23 +43,26 @@ class LLMError(Exception):
 
 
 def _get_api_key() -> str:
-    """Retrieves GEMINI_API_KEY from environment or .env without ever logging or printing it."""
-    for key in ["GEMINI_API_KEY", "gemma_api_key", "GEMMA_API_KEY"]:
+    """Retrieves Gemini/Gemma API key from environment or .env without ever logging or printing it."""
+    for key in ["GEMINI_API_KEY", "gemma_api_key", "GEMMA_API_KEY", "gemma_api_key_2"]:
         val = os.getenv(key)
         if val:
             return val.strip().strip("'\"")
 
     env_path = PROJECT_ROOT / ".env"
     if env_path.exists():
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip().strip("'\"")
-                    if k in ["GEMINI_API_KEY", "gemma_api_key", "GEMMA_API_KEY"]:
-                        return v
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k in ["GEMINI_API_KEY", "gemma_api_key", "GEMMA_API_KEY", "gemma_api_key_2"]:
+                            return v
+        except Exception:
+            pass
     return ""
 
 
@@ -61,20 +75,22 @@ def get_client() -> genai.Client:
     if _CLIENT_INSTANCE is None:
         key = _get_api_key()
         if not key:
-            raise LLMError("API key not found. Ensure GEMINI_API_KEY is defined in environment or .env.")
+            raise LLMError("API key not found. Ensure GEMINI_API_KEY or gemma_api_key is defined in environment or .env.")
         _CLIENT_INSTANCE = genai.Client(api_key=key)
     return _CLIENT_INSTANCE
 
 
 def _is_retryable_error(exc: Exception) -> bool:
-    """Checks whether the exception represents a 429, 500, 504, or transient error."""
+    """Checks whether the exception represents a 429, 500, 503, 504, or transient error."""
     msg = str(exc).upper()
     return any(
         err in msg
         for err in [
             "429",
             "500",
+            "503",
             "504",
+            "UNAVAILABLE",
             "RESOURCE_EXHAUSTED",
             "DEADLINE_EXCEEDED",
             "INTERNAL",
@@ -85,15 +101,40 @@ def _is_retryable_error(exc: Exception) -> bool:
     )
 
 
+
+def _resolve_timeout(model: str, timeout: Optional[int] = None) -> int:
+    """Resolves request timeout in seconds based on explicit argument or model type."""
+    if timeout is not None:
+        return int(timeout)
+    if model == REVIEWER_MODEL:
+        return REVIEWER_TIMEOUT
+    if model == VISION_MODEL:
+        return VISION_TIMEOUT
+    return WRITER_TIMEOUT
+
+
+def _get_writer_thinking_level() -> Optional[Any]:
+    """Inspects SDK types for minimal/low thinking level enum."""
+    if hasattr(types, "ThinkingLevel"):
+        tl = getattr(types.ThinkingLevel, "MINIMAL", None)
+        if tl is None:
+            tl = getattr(types.ThinkingLevel, "LOW", None)
+        return tl
+    return "MINIMAL"
+
+
 def _build_config(
     system: str,
+    model: str = WRITER_MODEL,
     json_schema: Any = None,
     temperature: float = 0.2,
-    timeout: int = 45,
+    timeout: Optional[int] = None,
     thinking_level: Optional[Any] = None,
+    tools: Optional[list[Any]] = None,
 ) -> types.GenerateContentConfig:
-    """Constructs a GenerateContentConfig object with timeout and thinking options."""
-    http_opts = types.HttpOptions(timeout=int(timeout * 1000))
+    """Constructs a GenerateContentConfig object with timeout, tools, and thinking options."""
+    effective_timeout = _resolve_timeout(model, timeout)
+    http_opts = types.HttpOptions(timeout=int(effective_timeout * 1000))
 
     kwargs: dict[str, Any] = {
         "system_instruction": system,
@@ -106,83 +147,167 @@ def _build_config(
         if not isinstance(json_schema, bool):
             kwargs["response_schema"] = json_schema
 
-    if thinking_level is not None:
-        kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
+    if tools is not None:
+        kwargs["tools"] = tools
+
+    # Thinking configuration: check if SDK types support it
+    if hasattr(types, "ThinkingConfig"):
+        if thinking_level is None and tools is None:
+            # Use minimal/low thinking for the writer model when not using conflicting tools
+            if model == WRITER_MODEL or "writer" in model.lower() or "gemma" in model.lower():
+                thinking_level = _get_writer_thinking_level()
+
+        if thinking_level is not False and thinking_level is not None:
+            try:
+                kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
+            except Exception:
+                pass
 
     return types.GenerateContentConfig(**kwargs)
 
 
-def generate(
+def _prepare_contents(user: str, images: Any = None) -> Any:
+    """Prepares multimodal or text content for generate_content."""
+    if not images:
+        return user
+
+    contents: list[Any] = []
+    if user:
+        contents.append(user)
+
+    if isinstance(images, (list, tuple)):
+        contents.extend(images)
+    else:
+        contents.append(images)
+
+    return contents
+
+
+def _normalize_args(
+    model: str,
     system: str,
     user: str,
-    json_schema: Any = None,
-    temperature: float = 0.2,
-    timeout: int = 45,
-    thinking_level: Optional[Any] = None,
-    model: str = DEFAULT_MODEL,
-) -> str:
+) -> tuple[str, str, str]:
     """
-    Executes non-streaming generation using Gemma.
+    Ensures backwards compatibility if called positionally as generate(system, user).
+    If model contains newlines/spaces and user is empty, model is treated as system prompt.
+    """
+    if not user and system and ("\n" in model or " " in model or model not in [WRITER_MODEL, VISION_MODEL, REVIEWER_MODEL]):
+        return WRITER_MODEL, model, system
+    return model, system, user
+
+
+def generate(
+    model: str = WRITER_MODEL,
+    system: str = "",
+    user: str = "",
+    json_schema: Any = None,
+    images: Any = None,
+    temperature: float = 0.2,
+    timeout: Optional[int] = None,
+    thinking_level: Optional[Any] = None,
+    tools: Optional[list[Any]] = None,
+    return_raw: bool = False,
+) -> Any:
+    """
+    Executes non-streaming generation using google-genai SDK.
+
+    Args:
+        model: Model identifier (defaults to WRITER_MODEL).
+        system: System instruction prompt.
+        user: User query or content.
+        json_schema: Optional JSON schema for structured output.
+        images: Optional image(s) or multimodal parts.
+        temperature: Sampling temperature (default: 0.2).
+        timeout: Timeout in seconds (default derived from model config).
+        thinking_level: Optional thinking level (defaults to minimal/low for writer).
+        tools: Optional list of tools (e.g. GoogleSearch).
+        return_raw: If True, returns full GenerateContentResponse object.
 
     Retries once on 429 / 500 / 504 with a 3-second pause.
     Raises LLMError on terminal failure.
     """
+    model, system, user = _normalize_args(model, system, user)
     client = get_client()
     config = _build_config(
         system=system,
+        model=model,
         json_schema=json_schema,
         temperature=temperature,
         timeout=timeout,
         thinking_level=thinking_level,
+        tools=tools,
     )
+    contents = _prepare_contents(user, images=images)
 
     for attempt in range(2):
         try:
             response = client.models.generate_content(
                 model=model,
-                contents=user,
+                contents=contents,
                 config=config,
             )
+            if return_raw:
+                return response
             return response.text.strip() if response.text else ""
         except Exception as exc:
             if attempt == 0 and _is_retryable_error(exc):
                 time.sleep(3.0)
                 continue
-            raise LLMError(f"Gemma generation failed: {exc}") from exc
+            raise LLMError(f"Generation failed for model '{model}': {exc}") from exc
 
+    if return_raw:
+        return None
     return ""
 
 
 def generate_stream(
-    system: str,
-    user: str,
+    model: str = WRITER_MODEL,
+    system: str = "",
+    user: str = "",
     json_schema: Any = None,
+    images: Any = None,
     temperature: float = 0.2,
-    timeout: int = 45,
+    timeout: Optional[int] = None,
     thinking_level: Optional[Any] = None,
-    model: str = DEFAULT_MODEL,
+    tools: Optional[list[Any]] = None,
 ) -> Iterator[str]:
     """
-    Executes streaming generation using Gemma and yields text chunks.
+    Executes streaming generation using google-genai SDK and yields text chunks.
+
+    Args:
+        model: Model identifier (defaults to WRITER_MODEL).
+        system: System instruction prompt.
+        user: User query or content.
+        json_schema: Optional JSON schema for structured output.
+        images: Optional image(s) or multimodal parts.
+        temperature: Sampling temperature (default: 0.2).
+        timeout: Timeout in seconds (default derived from model config).
+        thinking_level: Optional thinking level (defaults to minimal/low for writer).
+        tools: Optional list of tools.
 
     Retries initialization once on 429 / 500 / 504 with a 3-second pause.
     Raises LLMError on terminal failure.
     """
+    model, system, user = _normalize_args(model, system, user)
     client = get_client()
     config = _build_config(
         system=system,
+        model=model,
         json_schema=json_schema,
         temperature=temperature,
         timeout=timeout,
         thinking_level=thinking_level,
+        tools=tools,
     )
+    contents = _prepare_contents(user, images=images)
 
     yielded_any = False
     for attempt in range(2):
         try:
             response_stream = client.models.generate_content_stream(
                 model=model,
-                contents=user,
+                contents=contents,
                 config=config,
             )
             for chunk in response_stream:
@@ -194,5 +319,4 @@ def generate_stream(
             if attempt == 0 and not yielded_any and _is_retryable_error(exc):
                 time.sleep(3.0)
                 continue
-            raise LLMError(f"Gemma streaming generation failed: {exc}") from exc
-
+            raise LLMError(f"Streaming generation failed for model '{model}': {exc}") from exc

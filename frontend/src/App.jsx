@@ -1,23 +1,73 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import HomeTab from './components/HomeTab';
-import InsightsTab from './components/InsightsTab';
 import QueryTab from './components/QueryTab';
-import { Scale, Shield, PhoneCall } from 'lucide-react';
+import { Scale, Shield, PhoneCall, AlertTriangle, RotateCcw } from 'lucide-react';
+import { getBaseUrl, subscribeBaseUrl, getHealth, isMixedContentUrl } from './lib/api';
+import './App.css';
+
+// Lazy-load heavier auxiliary components to optimize initial bundle and runtime memory
+const InsightsTab = lazy(() => import('./components/InsightsTab'));
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem('legal_lens_language') || 'en';
+  });
   const [prefillQuestion, setPrefillQuestion] = useState("");
   const [prefillAttachment, setPrefillAttachment] = useState(null);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('legal_lens_theme') || 'dark';
   });
+  const [apiUrl, setApiUrl] = useState(() => getBaseUrl());
+
+  // Startup connectivity check state (GET /health)
+  const [healthStatus, setHealthStatus] = useState('checking'); // 'checking' | 'healthy' | 'offline'
+  const [isRetryingHealth, setIsRetryingHealth] = useState(false);
+
+  // Demo mode detection (?demo=1 in URL)
+  const [hasDemoParam] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isDemo = params.get('demo') === '1' || sessionStorage.getItem('legal_lens_demo_mode') === '1';
+      if (params.get('demo') === '1') {
+        sessionStorage.setItem('legal_lens_demo_mode', '1');
+      }
+      return isDemo;
+    }
+    return false;
+  });
+  const [isDemoModeActive, setIsDemoModeActive] = useState(() => hasDemoParam);
+
+  const checkConnectivity = async () => {
+    setIsRetryingHealth(true);
+    try {
+      await getHealth({ timeout: 6000 });
+      setHealthStatus('healthy');
+    } catch {
+      setHealthStatus('offline');
+    } finally {
+      setIsRetryingHealth(false);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('legal_lens_theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('legal_lens_language', language);
+  }, [language]);
+
+  useEffect(() => {
+    return subscribeBaseUrl((newUrl) => setApiUrl(newUrl));
+  }, []);
+
+  // Perform startup connectivity check on mount and whenever apiUrl changes
+  useEffect(() => {
+    checkConnectivity();
+  }, [apiUrl]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -59,7 +109,7 @@ function App() {
 
   return (
     <div className={`app-layout theme-${theme}`}>
-      {/* Top Navbar with Dark/Light Toggle & Smooth Language Dropdown */}
+      {/* Top Navbar with Dark/Light Toggle, Language Dropdown & Demo Mode Switch */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -67,7 +117,47 @@ function App() {
         setLanguage={setLanguage}
         theme={theme}
         toggleTheme={toggleTheme}
+        hasDemoParam={hasDemoParam}
+        isDemoModeActive={isDemoModeActive}
+        setIsDemoModeActive={setIsDemoModeActive}
       />
+
+      {/* Startup Connectivity Check Banner */}
+      {healthStatus === 'offline' && (
+        <aside className="server-offline-banner" role="alert" aria-live="assertive">
+          <div className="container server-offline-flex">
+            <div className="offline-message-wrap">
+              <AlertTriangle size={18} className="offline-icon-amber" />
+              <div className="offline-text-content">
+                <div className="offline-main-line">
+                  <strong className="offline-title">Server is waking up or offline.</strong>
+                  <span className="offline-url-pill">
+                    Active API: <code>{apiUrl}</code>
+                  </span>
+                  {isMixedContentUrl(apiUrl) && (
+                    <span className="mixed-content-warning-pill" title="HTTPS pages block plain HTTP requests">
+                      ⚠️ Mixed Content (HTTP on HTTPS)
+                    </span>
+                  )}
+                </div>
+                <p className="offline-hint-text">
+                  Tip: If your backend is running on a tunnel, append <code>?api=&lt;https://your-tunnel-url&gt;</code> to the address bar to switch instantly without redeploying.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-offline-retry"
+              onClick={checkConnectivity}
+              disabled={isRetryingHealth}
+              aria-label="Retry server connection"
+            >
+              <RotateCcw size={14} className={isRetryingHealth ? 'icon-spin' : ''} />
+              <span>{isRetryingHealth ? "Checking…" : "Retry"}</span>
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content Area */}
       <main className="main-content" role="main">
@@ -82,10 +172,17 @@ function App() {
         )}
 
         {activeTab === 'insights' && (
-          <InsightsTab
-            onAskQuestion={handleAskQuestionFromInsight}
-            language={language}
-          />
+          <Suspense fallback={
+            <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div className="status-spinner-dot" style={{ margin: '0 auto 1rem auto' }} />
+              <p>Loading Statutory Insights &amp; Legal Guides…</p>
+            </div>
+          }>
+            <InsightsTab
+              onAskQuestion={handleAskQuestionFromInsight}
+              language={language}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'query' && (
@@ -95,6 +192,10 @@ function App() {
             prefillAttachment={prefillAttachment}
             clearPrefillAttachment={() => setPrefillAttachment(null)}
             language={language}
+            setLanguage={setLanguage}
+            hasDemoParam={hasDemoParam}
+            isDemoModeActive={isDemoModeActive}
+            setIsDemoModeActive={setIsDemoModeActive}
           />
         )}
       </main>
@@ -165,6 +266,15 @@ function App() {
             <p className="footer-copy">
               &copy; 2026 Legal-Lens Project. Non-profit public interest awareness.
             </p>
+            <div className="footer-api-pill" title="Active Legal Lens Backend API URL (override via ?api=<url>)">
+              <span className={`api-dot ${healthStatus === 'healthy' ? 'healthy' : healthStatus === 'offline' ? 'offline' : ''}`} />
+              <span>API: <code>{apiUrl}</code></span>
+              {isMixedContentUrl(apiUrl) && (
+                <span className="mixed-content-warning-pill" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>
+                  ⚠️ Mixed Content
+                </span>
+              )}
+            </div>
             <div className="footer-disclaimer-pill">
               <Shield size={14} />
               <span>Public Legal Literacy — Not formal attorney representation. Under Article 39A of Constitution of India.</span>

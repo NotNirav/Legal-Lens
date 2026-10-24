@@ -18,12 +18,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import requests
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, File, Form, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from rag.retrieve import CORPUS_RECORDS, retrieve, retrieve_tiered
+from orchestrator.config import REVIEWER_MODEL, VISION_MODEL, WRITER_MODEL
+from orchestrator.cache import get_cache_count
+from orchestrator.pipeline import run_pipeline_sync, stream_pipeline_sse
+from orchestrator.reviewer import review_answer
+from orchestrator.document import stream_document_pipeline_sse
+
 
 
 # Initialize FastAPI app
@@ -88,6 +94,8 @@ class StateJurisdictionSummary(BaseModel):
     jurisdiction: str
     chunks: int
     sources: List[StateSourceCount]
+    covered: bool = Field(default=True, description="Whether state-specific laws are indexed. If false, central law applies.")
+    note: Optional[str] = Field(default=None, description="Coverage note, e.g. 'Central law only' for unindexed states.")
 
 
 class RetrieveResponse(BaseModel):
@@ -101,6 +109,20 @@ class QueryPayload(BaseModel):
     file_name: Optional[str] = Field(default=None, description="Name of attached document")
     file_type: Optional[str] = Field(default=None, description="MIME type of document")
     file_data_base64: Optional[str] = Field(default=None, description="Base64 encoded attachment")
+
+
+class AskRequest(BaseModel):
+    query: str = Field(..., description="Legal inquiry text")
+    state: Optional[str] = Field(default=None, description="Optional state jurisdiction (e.g. 'Maharashtra')")
+    lang: Optional[str] = Field(default=None, description="Optional language ('en', 'hi')")
+
+
+class ReviewRequest(BaseModel):
+    query: str = Field(..., description="Original user legal question")
+    answer: str = Field(..., description="Answer text to review")
+    evidence_tags: Optional[List[str]] = Field(default=None, description="Optional tags cited in answer")
+    state: Optional[str] = Field(default=None, description="Optional state jurisdiction")
+    evidence: Optional[Any] = Field(default=None, description="Optional pre-loaded evidence")
 
 
 # ==============================================================================
@@ -129,19 +151,37 @@ def root_info() -> Dict[str, Any]:
         "version": "1.0.0",
         "model": "gemma-4-26b-a4b-it",
         "docs": "/docs",
-        "endpoints": ["/health", "/sources", "/states", "/retrieve", "/retrieve/tiered", "/api/query"],
+        "endpoints": ["/health", "/sources", "/states", "/retrieve", "/retrieve/tiered", "/api/query", "/ask", "/ask/sync", "/ask/document", "/review"],
     }
+
+
+
+
+
+ALL_INDIAN_STATES = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+    "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+    "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+    "Delhi"
+]
 
 
 @app.get("/health", tags=["Monitoring"])
 def health_check() -> Dict[str, Any]:
     """
-    Returns API health status and the count of active loaded legal chunks.
+    Returns API health status, loaded legal chunks, configured models, and cache size.
     """
     return {
         "status": "ok",
         "chunks": len(CORPUS_RECORDS),
-        "model": "gemma-4-26b-a4b-it",
+        "models": {
+            "writer": WRITER_MODEL,
+            "vision": VISION_MODEL,
+            "reviewer": REVIEWER_MODEL,
+        },
+        "cache_entries": get_cache_count(),
     }
 
 
@@ -175,7 +215,8 @@ def list_sources() -> List[Dict[str, Any]]:
 @app.get("/states", response_model=List[StateJurisdictionSummary], tags=["Metadata"])
 def list_states() -> List[Dict[str, Any]]:
     """
-    Returns each jurisdiction with its sources and chunk counts.
+    Returns each jurisdiction with its sources, chunk counts, and coverage status.
+    States with covered=false indicate only Central laws are indexed (show 'Central law only').
     """
     jur_data: Dict[str, Dict[str, int]] = {}
     for r in CORPUS_RECORDS:
@@ -192,14 +233,33 @@ def list_states() -> List[Dict[str, Any]]:
             {"source": s, "chunks": c}
             for s, c in sorted(sources_map.items(), key=lambda x: -x[1])
         ]
+        is_covered = True
+        note = "All-India Central Law & Constitution" if jur == "India" else "State laws indexed"
         summaries.append({
             "jurisdiction": jur,
             "chunks": total_chunks,
             "sources": sources_list,
+            "covered": is_covered,
+            "note": note,
         })
 
-    # Sort with India first, then alphabetically
-    summaries.sort(key=lambda x: (0 if x["jurisdiction"] == "India" else 1, x["jurisdiction"]))
+    # Include all other Indian states as covered=False with note 'Central law only'
+    covered_jurs = {s["jurisdiction"].lower() for s in summaries}
+    for state_name in ALL_INDIAN_STATES:
+        if state_name.lower() not in covered_jurs:
+            summaries.append({
+                "jurisdiction": state_name,
+                "chunks": 0,
+                "sources": [],
+                "covered": False,
+                "note": "Central law only",
+            })
+
+    # Sort with India first, then covered states, then remaining states alphabetically
+    summaries.sort(key=lambda x: (
+        0 if x["jurisdiction"] == "India" else (1 if x["covered"] else 2),
+        x["jurisdiction"]
+    ))
     return summaries
 
 
@@ -408,7 +468,97 @@ def query_assistant(payload: QueryPayload) -> Dict[str, Any]:
     }
 
 
+@app.post("/ask", tags=["Legal Assistant"])
+async def ask_stream_endpoint(payload: AskRequest):
+    """
+    Streaming legal guidance endpoint using Server-Sent Events (SSE).
+    Emits 'sources', 'token', 'done' (or 'error') events.
+    Frontend connects with fetch() to stream tokens in real-time.
+    """
+    return StreamingResponse(
+        stream_pipeline_sse(
+            query=payload.query,
+            state=payload.state,
+            lang=payload.lang,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/ask/sync", tags=["Legal Assistant"])
+async def ask_sync_endpoint(payload: AskRequest):
+    """
+    Synchronous legal guidance endpoint returning full JSON response.
+    Returns: {answer, sources_cited, trace, any_confident, state, lang, fallback}.
+    """
+    result = await run_pipeline_sync(
+        query=payload.query,
+        state=payload.state,
+        lang=payload.lang,
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
+@app.post("/review", tags=["Reviewer"])
+async def review_endpoint(payload: ReviewRequest):
+    """
+    Audits the generated answer against verified evidence using REVIEWER_MODEL (gemma-4-31b-it).
+    Runs off the critical path.
+    Always returns HTTP 200 with {"ok": false} on failure or timeout so the UI hides the card.
+    """
+    try:
+        result = await review_answer(
+            query=payload.query,
+            answer=payload.answer,
+            evidence_tags=payload.evidence_tags,
+            state=payload.state,
+            evidence=payload.evidence,
+            timeout=70.0,
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except Exception:
+        return JSONResponse(content={"ok": False}, status_code=status.HTTP_200_OK)
+
+
+@app.post("/ask/document", tags=["Document Assistant"])
+async def ask_document_endpoint(
+    file: UploadFile = File(..., description="Uploaded document image (JPG, PNG, WEBP up to 8MB)"),
+    query: Optional[str] = Form(default=None, description="Optional legal question about document"),
+    state: Optional[str] = Form(default=None, description="Optional state jurisdiction"),
+    lang: Optional[str] = Form(default=None, description="Optional language ('en', 'hi')"),
+):
+    """
+    Multimodal legal document analysis and answer assembly endpoint using Server-Sent Events (SSE).
+    Accepts JPG, PNG, or WEBP images up to 8 MB.
+    Emits 'document', 'sources', 'token', and 'done' (or 'error') events.
+    """
+    file_bytes = await file.read()
+    return StreamingResponse(
+        stream_document_pipeline_sse(
+            file_bytes=file_bytes,
+            filename=file.filename,
+            query=query,
+            state=state,
+            lang=lang,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+
 

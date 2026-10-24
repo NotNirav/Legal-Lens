@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Search, ArrowRight, Sparkles, UploadCloud, 
-  ShieldCheck, FileText, Scale, ChevronRight, CheckCircle2 
+  Search, ArrowRight, Sparkles, UploadCloud 
 } from 'lucide-react';
 import AudienceSection from './AudienceSection';
 import SampleAnswerPreview from './SampleAnswerPreview';
@@ -113,7 +112,7 @@ export default function HomeTab({
                 <input
                   type="text"
                   className="dock-text-input"
-                  placeholder="Describe your situation (e.g. 'Can my landlord lock me out without notice?')"
+                  placeholder={t.heroInputPlaceholder || "Describe your situation (e.g. 'Can my landlord lock me out without notice?')"}
                   value={heroInput}
                   onChange={(e) => setHeroInput(e.target.value)}
                   aria-label="Describe your legal situation"
@@ -124,7 +123,7 @@ export default function HomeTab({
                   disabled={!heroInput.trim()}
                   aria-label="Submit Question"
                 >
-                  <span>Ask AI</span>
+                  <span>{t.askButton || "Ask AI"}</span>
                   <ArrowRight size={16} />
                 </button>
               </div>

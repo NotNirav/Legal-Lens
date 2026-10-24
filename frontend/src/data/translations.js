@@ -66,7 +66,7 @@ export const translations = {
     disclaimerTitle: "Important Public Legal Information Notice",
     disclaimerText: "Legal-Lens provides educational legal awareness and grounded statutory information under Article 39A of the Constitution of India. It does not constitute formal legal representation or attorney-client advice. For active litigation, consult your District Legal Services Authority (DLSA) or a licensed advocate.",
     
-    // Assistant labels
+    // Assistant labels & Key UI strings
     newChat: "New Conversation",
     whatThisMeans: "What This Means in Plain Words",
     possibleRights: "Your Legal Rights Under Indian Law",
@@ -74,8 +74,67 @@ export const translations = {
     whereToGetHelp: "Official Helplines & Redressal Portals",
     supportingSources: "Verified Legal Provisions & Precedents",
     uploadDoc: "Attach Notice / Document",
-    uploadNotice: "Supports JPG, PNG, PDF up to 10MB. Please redact personal IDs (Aadhaar/PAN) before uploading.",
-    sampleQuestionsHeader: "Common Everyday Legal Inquiries"
+    uploadNotice: "Supports JPG, PNG, WEBP up to 8MB. Please redact personal IDs (Aadhaar/PAN) before uploading.",
+    sampleQuestionsHeader: "Common Everyday Legal Inquiries",
+
+    // Placeholders
+    inputPlaceholder: "Describe your legal situation or dispute in natural language...",
+    inputPlaceholderDoc: "Ask a specific question about this document, or hit Send...",
+    inputSynthesizing: "Gemma 4 is synthesizing legal guidance...",
+
+    // Buttons
+    sendBtn: "Send Inquiry",
+    stopBtn: "Stop Generating",
+    retryBtn: "Retry Question",
+    detectLocation: "Detect my location",
+    detectingLocation: "Detecting…",
+    copyBrief: "Copy Brief",
+    copied: "Copied",
+    printBrief: "Print Brief",
+    attachDocBtn: "Attach Legal Notice, Agreement, or Bill Image (JPG, PNG, WEBP up to 8 MB)",
+    removeDocBtn: "Remove attached file",
+    showMore: "Show full text",
+    showLess: "Show less",
+
+    // Notices & Disclaimers
+    disclaimer: "General information, not legal advice.",
+    privacyNote: "Your image is sent to the AI model to read it and isn't stored by this app.",
+    uncoveredNote: "Only central law and the Constitution are available for this state.",
+    fallbackNotice: "Showing the relevant law directly (AI writer unavailable)",
+    lowConfidenceNotice: "We couldn't find a strong match; here is the closest law. Consider free legal aid (NALSA).",
+    synthesizingNotice: "Gemma 4 synthesizing verified legal provisions...",
+    secondModelChecking: "Second model is double-checking…",
+    secondModelReview: "Second-model review",
+    howAnswerMade: "How this answer was made",
+    retrievedAuthorities: "Retrieved Legal Authorities:",
+    searchingLaw: "Searching the law…",
+    checkingWeb: "Checking official web sources…",
+    writingAnswer: "Writing the answer…",
+    serverUnreachable: "Server Unreachable",
+    requestTimeout: "Request Timed Out",
+    unreadablePhoto: "Unreadable Document Photo",
+
+    // State labels
+    stateLawLabel: "State Law:",
+    stateIndexed: "Indexed",
+    centralOnly: "Central Only",
+    answeringFor: "Answering for:",
+    whatWeRead: "What we read from your document",
+    docType: "Document Type:",
+    parties: "Parties:",
+    noticePeriod: "Notice Period:",
+    dates: "Dates:",
+    deadlines: "Deadlines:",
+    amounts: "Amounts:",
+    summary: "Summary:",
+
+    // 4 Pre-filled Example Questions
+    exampleQuestions: [
+      "Can my landlord throw me out without notice?",
+      "My salary was deducted without telling me",
+      "What are my rights if the police arrest me?",
+      "Online seller is refusing to refund a defective product"
+    ]
   },
   hi: {
     siteTitle: "लीगल-लेंस",
@@ -113,7 +172,7 @@ export const translations = {
     docSectionSubtitle: "कोई कानूनी नोटिस, निष्कासन पत्र या संदिग्ध बिल मिला है? अधिकारों और वैधता की तुरंत जांच के लिए अपलोड करें।",
     docDragDrop: "अपना कानूनी नोटिस या अनुबंध यहां खींचें और छोड़ें",
     docBrowse: "अपने डिवाइस से फ़ाइल चुनें",
-    docFormats: "PDF, JPG, PNG समर्थित (अधिकतम 10MB)।",
+    docFormats: "JPG, PNG, WEBP समर्थित (अधिकतम 8MB)।",
     docPrivacyNotice: "अपनी गोपनीयता के लिए कृपया आधार या पैन नंबर मिटाकर ही अपलोड करें।",
     docAnalyzeBtn: "दस्तावेज़ के अधिकार जांचें",
     docRemove: "फ़ाइल हटाएं",
@@ -133,15 +192,75 @@ export const translations = {
     disclaimerTitle: "महत्वपूर्ण सार्वजनिक कानूनी सूचना",
     disclaimerText: "यह मंच केवल कानूनी जागरूकता और जानकारी के लिए है। यह किसी वकील का विकल्प नहीं है। गंभीर कानूनी समस्या में जिला विधिक सेवा प्राधिकरण (DLSA) या आपातकालीन सेवाओं से संपर्क करें।",
     
-    newChat: "नई बातचीत",
-    whatThisMeans: "इसका क्या अर्थ है",
-    possibleRights: "कानून के तहत आपके अधिकार",
-    nextSteps: "सुझाए गए कदम",
-    whereToGetHelp: "आधिकारिक हेल्पलाइन और पोर्टल",
+    // Assistant labels & Key UI strings (Hindi)
+    newChat: "नया संवाद",
+    whatThisMeans: "सरल शब्दों में इसका क्या अर्थ है",
+    possibleRights: "भारतीय कानून के तहत आपके अधिकार",
+    nextSteps: "सुझाए गए तुरंत कदम",
+    whereToGetHelp: "आधिकारिक हेल्पलाइन और शिकायत पोर्टल",
     supportingSources: "सत्यापित कानूनी स्रोत एवं अदालती निर्णय",
     uploadDoc: "दस्तावेज़ जोड़ें",
-    uploadNotice: "JPG, PNG, PDF (अधिकतम 10MB)। कृपया आधार या पैन नंबर मिटाकर ही अपलोड करें।",
-    sampleQuestionsHeader: "अक्सर पूछे जाने वाले कानूनी सवाल"
+    uploadNotice: "JPG, PNG, WEBP (अधिकतम 8MB)। कृपया आधार या पैन नंबर मिटाकर ही अपलोड करें।",
+    sampleQuestionsHeader: "अक्सर पूछे जाने वाले कानूनी सवाल",
+
+    // Placeholders
+    inputPlaceholder: "अपनी कानूनी स्थिति या विवाद को सरल भाषा में बताएं...",
+    inputPlaceholderDoc: "इस दस्तावेज़ के बारे में कोई सवाल पूछें, या भेजें दबाएं...",
+    inputSynthesizing: "जेम्मा 4 कानूनी सलाह तैयार कर रहा है...",
+
+    // Buttons
+    sendBtn: "पूछें",
+    stopBtn: "रोकें",
+    retryBtn: "पुनः प्रयास करें",
+    detectLocation: "मेरा स्थान पहचानें",
+    detectingLocation: "स्थान खोज रहे हैं…",
+    copyBrief: "कॉपी करें",
+    copied: "कॉपी किया गया",
+    printBrief: "प्रिंट करें",
+    attachDocBtn: "कानूनी नोटिस या बिल की फोटो जोड़ें (JPG, PNG, WEBP अधिकतम 8 MB)",
+    removeDocBtn: "फ़ाइल हटाएं",
+    showMore: "पूरा विवरण देखें",
+    showLess: "संक्षेप में देखें",
+
+    // Notices & Disclaimers
+    disclaimer: "सामान्य कानूनी जानकारी, वकीली सलाह नहीं।",
+    privacyNote: "आपकी छवि केवल पढ़ने के लिए मॉडल को भेजी जाती है, स्टोर नहीं की जाती।",
+    uncoveredNote: "इस राज्य के लिए केवल केंद्रीय कानून और संविधान उपलब्ध हैं।",
+    fallbackNotice: "सीधे प्रासंगिक कानून प्रदर्शित किया जा रहा है (AI लेखक अनुपलब्ध)",
+    lowConfidenceNotice: "मजबूत कानूनी धारा नहीं मिली; यह सबसे करीबी कानून है। NALSA (15100) से मुफ्त कानूनी सहायता लें।",
+    synthesizingNotice: "जेम्मा 4 प्रासंगिक कानूनी धाराओं का विश्लेषण कर रहा है...",
+    secondModelChecking: "दूसरा मॉडल सत्यापन कर रहा है…",
+    secondModelReview: "दूसरे मॉडल द्वारा समीक्षा",
+    howAnswerMade: "उत्तर निर्माण प्रक्रिया (Trace)",
+    retrievedAuthorities: "प्राप्त कानूनी अधिकार:",
+    searchingLaw: "कानूनी धाराओं की खोज…",
+    checkingWeb: "आधिकारिक वेब स्रोतों की जांच…",
+    writingAnswer: "उत्तर तैयार किया जा रहा है…",
+    serverUnreachable: "सर्वर से संपर्क नहीं हो सका",
+    requestTimeout: "अनुरोध समय समाप्त (Timeout)",
+    unreadablePhoto: "अस्पष्ट दस्तावेज़ फोटो",
+
+    // State labels
+    stateLawLabel: "राज्य कानून:",
+    stateIndexed: "उपलब्ध",
+    centralOnly: "केवल केंद्रीय",
+    answeringFor: "कार्यक्षेत्र:",
+    whatWeRead: "आपके दस्तावेज़ से प्राप्त मुख्य जानकारी",
+    docType: "दस्तावेज़ का प्रकार:",
+    parties: "पक्षकार (Parties):",
+    noticePeriod: "नोटिस अवधि:",
+    dates: "तारीखें:",
+    deadlines: "अंतिम तिथियां:",
+    amounts: "राशि:",
+    summary: "संक्षेप:",
+
+    // 4 Pre-filled Example Questions (Hindi)
+    exampleQuestions: [
+      "क्या मेरा मकान मालिक बिना नोटिस के मुझे बाहर निकाल सकता है?",
+      "बिना बताए मेरा वेतन (सैलरी) काट लिया गया",
+      "अगर पुलिस मुझे गिरफ्तार करती है तो मेरे क्या अधिकार हैं?",
+      "ऑनलाइन विक्रेता खराब सामान का रिफंड देने से मना कर रहा है"
+    ]
   },
   mr: {
     siteTitle: "लीगल-लेन्स",

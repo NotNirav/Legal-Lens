@@ -8,7 +8,7 @@
 import { CITIZEN_INSIGHTS } from '../data/citizenRights';
 import { COURT_PRECEDENTS } from '../data/courtPrecedents';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { getBaseUrl } from '../lib/api';
 
 /**
  * Searches the local legal knowledge base
@@ -87,7 +87,7 @@ export async function queryLegalAssistant({ message, attachment = null, language
       file_data_base64: null
     };
 
-    const response = await fetch(`${API_BASE_URL}/api/query`, {
+    const response = await fetch(`${getBaseUrl()}/api/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

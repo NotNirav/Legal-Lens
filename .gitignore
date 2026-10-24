@@ -22,9 +22,15 @@ node_modules/
 .env/
 .env
 .env.*
+!.env.example
 
 # IDE & OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Logs and Persistent Cache
+logs/
+cache/
+
