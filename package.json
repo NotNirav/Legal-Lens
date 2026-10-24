@@ -1,0 +1,12 @@
+{
+  "name": "legal-lens",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multilingual AI Legal Assistant & Hybrid RAG Retrieval Engine for Indian Law",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "lint": "npm --prefix frontend run lint"
+  }
+}
