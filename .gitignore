@@ -1,10 +1,29 @@
-# Python cache
+# ChromaDB local vector storage
+chroma_db/
+
+# Python cache & build files
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
 
 # Large raw dataset binaries (do not commit to git)
 *.parquet
 
-# Virtual environments
-venv/
+# Environment files
 .env/
+.env
+.env.*
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

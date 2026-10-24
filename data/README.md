@@ -1,113 +1,129 @@
-# Constitution of India — RAG-Ready Dataset
+# Legal Lens — Statutory & Constitutional Datasets (`data/`)
 
-Processed and extracted from the official **Government of India, Ministry of Law and Justice (Legislative Department)** pocket edition of the *Constitution of India* (As on 1st May, 2024), incorporating all amendments up to the **Constitution (One Hundred and Sixth Amendment) Act, 2023**.
+This directory houses the foundational legal knowledge base for **Legal Lens**, encompassing the complete, authoritative text of the **Constitution of India** (updated through the 106th Constitutional Amendment Act, 2023), alongside normalized state and central statutory corpora in `data/processed/`.
 
 ---
 
-## 📁 Dataset Files Overview
+## 📁 Dataset Directory Overview
 
-| File / Folder | Format | Size | Description |
+| File / Folder | Format | Records / Size | Description |
 | :--- | :--- | :--- | :--- |
-| **`data/COI.json`** | Hierarchical JSON | ~1.48 MB | Complete structured tree: Metadata, Preface, Abbreviations, Preamble, 25 Parts, 23 Chapters, 503 Articles (with structured clauses and footnotes), 12 Schedules, and 3 Appendices. |
-| **`data/constitution_chunks.jsonl`** | JSON Lines | ~2.52 MB | **519 production-ready RAG chunks** (Preamble + 503 Articles + 12 Schedules + 3 Appendices) with hierarchical search context, dense/sparse retrieval text, and metadata for filtering. |
+| **`data/COI.json`** | Hierarchical JSON | ~1.48 MB | Complete structured tree of the Constitution: Preamble, 25 Parts, 23 Chapters, 503 Articles (with structured clauses and footnotes), 12 Schedules, and 3 Appendices. |
+| **`data/constitution_chunks.jsonl`** | JSON Lines | 519 chunks (~2.52 MB) | Raw RAG chunks extracted from the official PDF with hierarchical path metadata and raw search text. |
 | **`data/constitution_of_india.md`** | Master Markdown | ~0.89 MB | Full master text formatted with GitHub Flavored Markdown headings, blockquotes, tables, and amendment notes. |
-| **`data/markdown/`** | Modular Markdown | 41 files | Granular markdown files split by section: Preamble (`00_preamble.md`), 25 Parts, 12 Schedules, and 3 Appendices. |
+| **`data/markdown/`** | Modular Markdown | 41 files (~850 KB) | Granular markdown files split by section: Preamble (`00_preamble.md`), 25 Parts, 12 Schedules, and 3 Appendices. |
+| **`data/processed/constitution.jsonl`** | Canonical JSONL | 519 records (475 indexed) | **Production Constitutional Corpus**. Schema-normalized, footnote-repaired, with 70 line-break heading leaks fixed and active vs omitted flags. |
+| **`data/processed/acts.jsonl`** | Canonical JSONL | 218 records (123 indexed) | **Production Statutory Corpus**. Contains *The Maharashtra Rent Control Act, 1999* (MRCA) and *The Code on Wages (Central) Rules, 2026*, chunked by section/rule and subparts. |
 
 ---
 
-## 🏛 Structural Summary
+## 🏛 Structural & Corpus Statistics
 
-- **Total PDF Pages Processed**: 402
-- **Total Parts**: 25 (Parts I to XXII, including Parts IVA, IX, IXA, IXB, XIVA)
-- **Total Chapters**: 23
-- **Total Articles Extracted**: 503 (475 Active + 28 Omitted/Repealed with statutory history)
-- **Total Schedules**: 12 (First to Twelfth Schedule)
-- **Total Appendices**: 3
-  - *Appendix I*: Constitution (One Hundredth Amendment) Act, 2015 (India–Bangladesh Land Boundary Agreement)
-  - *Appendix II*: The Constitution (Application to Jammu and Kashmir) Order, 2019 (C.O. 272)
-  - *Appendix III*: Declaration under Article 370(3) of the Constitution (C.O. 273)
-- **Footnotes & Amendments**: Verbatim amendment history and commencement dates mapped to every article and schedule.
+### 1. Constitution of India (`data/processed/constitution.jsonl`)
+- **Source**: Ministry of Law and Justice (Legislative Department) pocket edition (As on 1st May, 2024).
+- **Total Articles Extracted**: 503 Articles (475 Active + 28 Omitted/Repealed with statutory history).
+- **Total Parts**: 25 (Parts I through XXII, including Parts IVA, IX, IXA, IXB, XIVA).
+- **Total Schedules & Appendices**: 12 Schedules, 3 Appendices (LBA 2015, C.O. 272, C.O. 273).
+- **Active Searchable Chunks (`index: true`)**: **475 records** (Preamble + active Articles).
+
+### 2. Multi-Statute Expansion (`data/processed/acts.jsonl`)
+- **The Maharashtra Rent Control Act, 1999 (MRCA)**:
+  - Jurisdiction: `Maharashtra` | Type: `act` | Status: `in_force`
+  - 60 statutory sections + subparts for long procedural sections (e.g., Section 7 standard rent, Section 16 eviction grounds, Section 23 repair obligations).
+  - Act-level Schedules I–III set to `index: false` for pure legal retrieval.
+  - Active Searchable Chunks: **68 records**.
+- **The Code on Wages (Central) Rules, 2026**:
+  - Jurisdiction: `India` | Type: `rules` | Parent Act: `Code on Wages, 2019` | Status: `in_force`
+  - 55 substantive rules covering minimum wage calculation, floor wage, hours of work, overtime, and authorized deductions.
+  - Procedural Form templates (Forms I to VII) preserved with `index: false`.
+  - Active Searchable Chunks: **55 records**.
+
+**Total Active Indexed Records in ChromaDB**: **598 chunks** (475 Constitutional + 123 Statutory).
 
 ---
 
-## 🚀 Quickstart RAG Usage Examples
+## 📋 Canonical Data Schema (`data/processed/*.jsonl`)
 
-### 1. Ingestion with LangChain
+Every record in `data/processed/` conforms to the unified Legal Lens canonical schema:
 
+```json
+{
+  "id": "mrca1999-s16-p1",
+  "source": "The Maharashtra Rent Control Act, 1999",
+  "section": "Section 16",
+  "title": "Section 16: When landlord may recover possession (Part 1)",
+  "text": "(1) Notwithstanding anything contained in this Act, a landlord shall be entitled to recover possession of any premises if the Court is satisfied...",
+  "lang": "en",
+  "plain_summary": "",
+  "tags": ["rent_control", "eviction", "landlord_tenant", "maharashtra"],
+  "url": "",
+  "type": "act",
+  "status": "in_force",
+  "jurisdiction": "Maharashtra",
+  "text_as_on": "31-03-2000",
+  "parent_act": null,
+  "original_title": "16. When landlord may recover possession",
+  "index": true
+}
+```
+
+### Key Field Definitions:
+- `id`: Globally unique slug across all corpuses (`coi-art-21`, `mrca1999-s16`, `cow-rules-2026-r21`).
+- `source`: Official canonical name of the statute or instrument.
+- `section`: Standardized citation identifier (`Article 21`, `Section 16`, `Rule 21`).
+- `title`: Human-readable heading including section/rule number.
+- `text`: Verbatim, unadulterated statutory text cleaned of running gazette headers and page numbers.
+- `index`: Boolean flag. When `false`, chunks are preserved for completeness but excluded from vector and BM25 search (e.g. omitted articles, blank schedules, forms).
+- `parent_act`: For subordinate legislation (Rules/Regulations), indicates the enabling parent statute (e.g. `Code on Wages, 2019`).
+
+---
+
+## 🚀 Quickstart: Loading Datasets
+
+### 1. Ingestion via Built-in Ingestion Pipeline
+The primary RAG pipeline automatically scans and embeds all `data/processed/*.jsonl` files where `index=true`:
+
+```bash
+# Embeds all active chunks into persistent ChromaDB using Ollama bge-m3
+python rag/ingest.py
+```
+
+### 2. Loading into Python / Pandas / Custom Scripts
+```python
+import json
+import glob
+
+records = []
+for file_path in glob.glob("data/processed/*.jsonl"):
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            item = json.loads(line)
+            if item.get("index", False):
+                records.append(item)
+
+print(f"Loaded {len(records)} active legal chunks across all statutes.")
+```
+
+### 3. Loading with LangChain
 ```python
 import json
 from langchain_core.documents import Document
 
 documents = []
-with open("data/constitution_chunks.jsonl", "r", encoding="utf-8") as f:
+with open("data/processed/constitution.jsonl", "r", encoding="utf-8") as f:
     for line in f:
         item = json.loads(line)
+        if not item.get("index", False):
+            continue
         doc = Document(
-            page_content=item["search_text"],
-            metadata=item["metadata"]
+            page_content=f"{item['title']}\n\n{item['text']}",
+            metadata={
+                "id": item["id"],
+                "source": item["source"],
+                "section": item["section"],
+                "jurisdiction": item["jurisdiction"],
+                "status": item["status"]
+            }
         )
         documents.append(doc)
-
-print(f"Loaded {len(documents)} chunks for vector indexing.")
-```
-
-### 2. Loading into ChromaDB with Local Ollama Embeddings
-
-```python
-import json
-import chromadb
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
-
-client = chromadb.PersistentClient(path="./chroma_db")
-embed_fn = OllamaEmbeddingFunction(
-    url="http://localhost:11434/api/embeddings",
-    model_name="nomic-embed-text"  # or mxbai-embed-large / llama3
-)
-
-collection = client.get_or_create_collection(
-    name="indian_constitution",
-    embedding_function=embed_fn
-)
-
-ids, docs, metadatas = [], [], []
-with open("data/constitution_chunks.jsonl", "r", encoding="utf-8") as f:
-    for line in f:
-        item = json.loads(line)
-        ids.append(item["chunk_id"])
-        docs.append(item["search_text"])
-        metadatas.append(item["metadata"])
-
-collection.add(ids=ids, documents=docs, metadatas=metadatas)
-print("Vector indexing complete!")
-```
-
-### 3. Querying by Metadata Filtering (e.g., Fundamental Rights)
-
-```python
-results = collection.query(
-    query_texts=["freedom of speech and reasonable restrictions"],
-    where={"part_number": "III"},  # Filter only Fundamental Rights!
-    n_results=3
-)
-```
-
-### 4. Fast Direct Article Lookup using `COI.json`
-
-```python
-import json
-
-with open("data/COI.json", "r", encoding="utf-8") as f:
-    coi = json.load(f)
-
-# Build quick lookup index:
-article_index = {}
-for part in coi["parts"]:
-    for chap in part["chapters"]:
-        for art in chap["articles"]:
-            article_index[art["article_number"]] = art
-
-# Instant retrieval:
-art21 = article_index["21"]
-print(f"Article {art21['article_number']}: {art21['title']}")
-print(art21["full_text"])
 ```

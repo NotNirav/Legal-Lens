@@ -1,0 +1,28 @@
+{"question": "What legal protections and rights are guaranteed to a person upon arrest and detention by police?", "lang": "en", "expected_ids": ["art_22"], "in_scope": true}
+{"question": "Does the Constitution protect the freedom of speech and expression of citizens?", "lang": "en", "expected_ids": ["art_19"], "in_scope": true}
+{"question": "Which article guarantees equality before the law and equal protection of laws in India?", "lang": "en", "expected_ids": ["art_14"], "in_scope": true}
+{"question": "Is the fundamental right to protection of life and personal liberty guaranteed?", "lang": "en", "expected_ids": ["art_21"], "in_scope": true}
+{"question": "What does the Constitution provide regarding freedom of conscience and profession of religion?", "lang": "en", "expected_ids": ["art_25"], "in_scope": true}
+{"question": "Which article mandates free and compulsory education for children aged 6 to 14?", "lang": "en", "expected_ids": ["art_21a"], "in_scope": true}
+{"question": "Does the State have a duty to provide equal justice and free legal aid to the poor?", "lang": "en", "expected_ids": ["art_39a"], "in_scope": true}
+{"question": "Which constitutional provision completely abolishes untouchability and penalizes its practice?", "lang": "en", "expected_ids": ["art_17"], "in_scope": true}
+{"question": "पुलिस द्वारा किसी व्यक्ति को गिरफ्तार करने पर उसे क्या-क्या कानूनी अधिकार प्राप्त हैं?", "lang": "hi", "expected_ids": ["art_22"], "in_scope": true}
+{"question": "नागरिकों के विचार और अभिव्यक्ति की स्वतंत्रता का मूल अधिकार किस अनुच्छेद में है?", "lang": "hi", "expected_ids": ["art_19"], "in_scope": true}
+{"question": "विधि के समक्ष समता और विधियों के समान संरक्षण का अधिकार किस अनुच्छेद में दिया गया है?", "lang": "hi", "expected_ids": ["art_14"], "in_scope": true}
+{"question": "प्राण और दैहिक स्वतंत्रता के संरक्षण का अधिकार किस अनुच्छेद द्वारा सुनिश्चित किया गया है?", "lang": "hi", "expected_ids": ["art_21"], "in_scope": true}
+{"question": "अंतःकरण की और धर्म के अबाध रूप से मानने और प्रचार करने की स्वतंत्रता किसमें है?", "lang": "hi", "expected_ids": ["art_25"], "in_scope": true}
+{"question": "छह से चौदह वर्ष के बच्चों के लिए मुफ्त और अनिवार्य शिक्षा का अधिकार किस अनुच्छेद में है?", "lang": "hi", "expected_ids": ["art_21a"], "in_scope": true}
+{"question": "समान न्याय और गरीबों के लिए मुफ्त कानूनी सहायता का उपबंध किस अनुच्छेद में किया गया है?", "lang": "hi", "expected_ids": ["art_39a"], "in_scope": true}
+{"question": "संविधान का कौन सा अनुच्छेद अस्पृश्यता या छुआछूत का उन्मूलन करता है?", "lang": "hi", "expected_ids": ["art_17"], "in_scope": true}
+{"question": "Can my landlord evict me from my rented room without giving prior notice?", "lang": "en", "expected_ids": ["mrca1999-s15", "mrca1999-s16-p1", "mrca1999-s20", "mrca1999-s42"], "in_scope": true}
+{"question": "My private company employer is not paying overtime and minimum wage under the labor code", "lang": "en", "expected_ids": ["cow-rules-2026-r6", "cow-rules-2026-r3", "cow-rules-2026-r8"], "in_scope": true}
+{"question": "Can a landlord cut off or withhold electricity and water supply to force a tenant to vacate?", "lang": "en", "expected_ids": ["mrca1999-s29"], "in_scope": true}
+{"question": "Is it legally mandatory in Maharashtra for a tenancy agreement to be in writing and registered?", "lang": "en", "expected_ids": ["mrca1999-s55"], "in_scope": true}
+{"question": "What is the rule when total deductions from an employee's wages exceed fifty per cent?", "lang": "en", "expected_ids": ["cow-rules-2026-r13"], "in_scope": true}
+{"question": "Who is responsible for paying minimum bonus if a labor contractor fails to pay it to employees?", "lang": "en", "expected_ids": ["cow-rules-2026-r21"], "in_scope": true}
+{"question": "क्या मकान मालिक किरायेदार के कमरे का पानी या बिजली का कनेक्शन काट सकता है?", "lang": "hi", "expected_ids": ["mrca1999-s29"], "in_scope": true}
+{"question": "महाराष्ट्र में मकान मालिक किन परिस्थितियों में किरायेदार को बेदखल कर सकता है?", "lang": "hi", "expected_ids": ["mrca1999-s16-p1", "mrca1999-s15"], "in_scope": true}
+{"question": "काम के दौरान नुकसान या क्षति होने पर वेतन से कटौती करने की क्या प्रक्रिया है?", "lang": "hi", "expected_ids": ["cow-rules-2026-r18"], "in_scope": true}
+{"question": "मजदूरों को सप्ताह में विश्राम का दिन और ओवरटाइम मजदूरी मिलने का क्या नियम है?", "lang": "hi", "expected_ids": ["cow-rules-2026-r6"], "in_scope": true}
+{"question": "How do I file a consumer court complaint to get a refund for a damaged mobile phone?", "lang": "en", "expected_ids": [], "in_scope": false}
+{"question": "My phone was stolen in a market, how do I register an online theft e-FIR?", "lang": "en", "expected_ids": [], "in_scope": false}
