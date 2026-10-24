@@ -12,9 +12,10 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 # Ensure project root in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -84,12 +85,18 @@ def run_evaluation() -> None:
 
         # Retrieve top 5
         retrieved = retrieve(q, k=5)
-        retrieved_ids = [r["id"] for r in retrieved]
 
-        # Check hits
-        hit1 = int(any(doc_id in expected_ids for doc_id in retrieved_ids[:1]))
-        hit3 = int(any(doc_id in expected_ids for doc_id in retrieved_ids[:3]))
-        hit5 = int(any(doc_id in expected_ids for doc_id in retrieved_ids[:5]))
+        # Check hits: counts if any part id of an expected section matches
+        def matches_expected(res: Dict[str, Any], exp_set: Set[str]) -> bool:
+            cand_ids = {res.get("id", "")}
+            cand_ids.update(res.get("matched_parts", []))
+            cand_bases = {re.sub(r"-p\d+$", "", cid) for cid in cand_ids if cid}
+            exp_bases = {re.sub(r"-p\d+$", "", eid) for eid in exp_set if eid}
+            return bool(cand_ids.intersection(exp_set) or cand_bases.intersection(exp_bases))
+
+        hit1 = int(any(matches_expected(r, expected_ids) for r in retrieved[:1]))
+        hit3 = int(any(matches_expected(r, expected_ids) for r in retrieved[:3]))
+        hit5 = int(any(matches_expected(r, expected_ids) for r in retrieved[:5]))
 
         # Update stats
         results_by_lang["overall"]["total"] += 1

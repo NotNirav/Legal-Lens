@@ -110,6 +110,17 @@ def tokenize_text(text: str) -> List[str]:
     return re.findall(r"\w+", text.lower())
 
 
+def get_section_level_id(chunk_id: str) -> str:
+    """Strips split part suffixes (e.g., 'mrca1999-s16-p1' -> 'mrca1999-s16')."""
+    return re.sub(r"-p\d+$", "", chunk_id)
+
+
+def get_part_index(chunk_id: str) -> int:
+    """Extracts integer part number for ordering (e.g. '-p2' -> 2, non-split -> 0)."""
+    m = re.search(r"-p(\d+)$", chunk_id)
+    return int(m.group(1)) if m else 0
+
+
 def detect_act_in_query(query: str) -> Optional[str]:
     """Detects whether query explicitly names or references a specific statute or act."""
     q = query.lower()
@@ -482,6 +493,8 @@ def retrieve(
                 for extra_part in matching_chunks_sorted[1:]:
                     part_id = extra_part["id"]
                     rrf_scores[part_id] = rrf_scores.get(part_id, 0.0) + 0.1
+                    if part_id not in sorted_candidates:
+                        sorted_candidates.append(part_id)
             else:
                 # Multiple sources match and query did NOT specify an act:
                 # Do NOT force rank 1: give each match a moderate boost instead.
@@ -497,34 +510,90 @@ def retrieve(
                     reverse=True,
                 )
 
-    # 5. Format Top K Results
-    results: List[Dict[str, Any]] = []
-    for doc_id in sorted_candidates[:k]:
+    # 5. Collapse Split Sections & Format Top K Results
+    # If several chunks from the same section (ids like mrca1999-s16-p1, -p2) appear in the results,
+    # merge them into ONE result placed at the best-ranked part's position.
+    # text = matched parts concatenated in order (cap about 6000 chars),
+    # id = the section-level id, plus "matched_parts": [...].
+    # Distinct sections fill the top-k. Keep similarity as the best part's similarity.
+    section_groups: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    ordered_sec_keys: List[Tuple[str, str]] = []
+
+    for doc_id in sorted_candidates:
         record = CORPUS_BY_ID.get(doc_id)
         if not record:
             continue
 
         source_name = record.get("source", "Constitution of India")
-        section_name = record.get("section", "")
+        sec_level_id = get_section_level_id(doc_id)
+        sec_key = (source_name, sec_level_id)
+
+        sim_val = vec_sims.get(doc_id)
+        score_val = rrf_scores.get(doc_id, 0.0)
+
+        if sec_key not in section_groups:
+            ordered_sec_keys.append(sec_key)
+            base_title = re.sub(r"\s*\(Part\s*\d+\)$", "", record.get("title", ""))
+            section_groups[sec_key] = {
+                "id": sec_level_id,
+                "source": source_name,
+                "section": record.get("section", ""),
+                "title": base_title,
+                "part_title": record.get("part_title"),
+                "parent_act": record.get("parent_act") or "",
+                "status": record.get("status") or "",
+                "text_as_on": record.get("text_as_on") or "",
+                "best_score": score_val,
+                "best_sim": sim_val,
+                "matched_parts": [doc_id],
+            }
+        else:
+            group = section_groups[sec_key]
+            group["matched_parts"].append(doc_id)
+            if score_val > group["best_score"]:
+                group["best_score"] = score_val
+            if sim_val is not None:
+                if group["best_sim"] is None or sim_val > group["best_sim"]:
+                    group["best_sim"] = sim_val
+
+    results: List[Dict[str, Any]] = []
+    for sec_key in ordered_sec_keys[:k]:
+        group = section_groups[sec_key]
+        parts = group["matched_parts"]
+
+        # Sort matched parts in natural part order
+        parts_sorted = sorted(parts, key=get_part_index)
+
+        # Concatenate matched parts text in order
+        part_texts = [CORPUS_BY_ID[pid]["text"] for pid in parts_sorted if pid in CORPUS_BY_ID]
+        merged_text = "\n\n".join(part_texts).strip()
+
+        # Cap about 6000 chars
+        if len(merged_text) > 6000:
+            merged_text = merged_text[:6000].rstrip() + "..."
+
+        source_name = group["source"]
+        section_name = group["section"]
         citation_str = f"{source_name}, {section_name}" if section_name else source_name
 
-        sim_val = vec_sims.get(doc_id)  # float or None if only from BM25
+        sim_val = group["best_sim"]
         is_confident = (sim_val is not None and sim_val >= MIN_SIMILARITY)
 
         result_item = {
-            "id": record["id"],
+            "id": group["id"],
             "source": source_name,
             "section": section_name,
-            "title": record.get("title", ""),
-            "part_title": record.get("part_title"),
-            "parent_act": record.get("parent_act") or "",
-            "status": record.get("status") or "",
-            "text_as_on": record.get("text_as_on") or "",
-            "text": record.get("text", ""),
-            "score": round(rrf_scores.get(doc_id, 0.0), 6),
+            "title": group["title"],
+            "part_title": group["part_title"],
+            "parent_act": group["parent_act"],
+            "status": group["status"],
+            "text_as_on": group["text_as_on"],
+            "text": merged_text,
+            "score": round(group["best_score"], 6),
             "similarity": sim_val,
             "confident": is_confident,
             "citation": citation_str,
+            "matched_parts": parts_sorted,
         }
         results.append(result_item)
 
@@ -572,8 +641,10 @@ def main() -> None:
 
         sim_str = f"{res['similarity']:.4f}" if res["similarity"] is not None else "N/A (BM25 only)"
         conf_str = "✅ Confident" if res["confident"] else "⚠️ Low Confidence"
+        parts_info = f" [Merged parts: {', '.join(res['matched_parts'])}]" if len(res.get("matched_parts", [])) > 1 else ""
 
-        print(f"[{rank}] {res['citation']} (RRF: {res['score']}, Sim: {sim_str}) [{conf_str}]")
+        print(f"[{rank}] {res['citation']} (RRF: {res['score']}, Sim: {sim_str}) [{conf_str}]{parts_info}")
+        print(f"    ID     : {res['id']}")
         print(f"    Part   : {res.get('part_title')}")
         print(f"    Title  : {res['title']}")
         print(f"    Snippet: {clean_text}")

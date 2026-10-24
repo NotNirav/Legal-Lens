@@ -14,6 +14,10 @@ Legal-Lens/
 ├── requirements.txt                                # Python runtime dependencies
 ├── files.md                                        # Repository file index & architectural documentation
 │
+├── api/                                            # REST API Service (FastAPI)
+│   ├── __init__.py                                 # API package export
+│   └── main.py                                     # FastAPI app (/health, /sources, /retrieve), CORS & fail-safes
+│
 ├── data/                                           # Raw & structured Constitutional source documents
 │   ├── COI.json                                    # Master hierarchical tree of the Constitution (JSON)
 │   ├── Indian Constitution.pdf                     # Official Ministry of Law & Justice pocket edition (PDF)
@@ -56,7 +60,13 @@ Legal-Lens/
 ├── rag/                                            # Core RAG Retrieval & Ingestion Pipeline
 │   ├── __init__.py                                 # Package export for retrieve function
 │   ├── ingest.py                                   # Batch embedding (Ollama bge-m3) & ChromaDB upsert
-│   └── retrieve.py                                 # Hybrid search (Dense Vector + BM25 + 2x RRF + Explicit Boost)
+│   └── retrieve.py                                 # Hybrid search (Dense Vector + BM25 + 2x RRF + Section Collapsing)
+│
+├── orchestrator/                                   # Answer Assembly & Prompt Generation Layer
+│   ├── __init__.py                                 # Module export
+│   ├── evidence.py                                 # Evidence aggregator, Devanagari language detector, [L#] tagger
+│   ├── prompt.py                                   # Grounded prompt builder, anti-hallucination rules, fallback logic
+│   └── show_prompt.py                              # Benchmark prompt demonstration CLI (no LLM calls)
 │
 ├── eval/                                           # Retrieval Evaluation Benchmark
 │   ├── questions.jsonl                             # 28 benchmark questions (14 EN, 12 HI, 2 Out-of-Scope)
@@ -95,8 +105,16 @@ Legal-Lens/
 | **`README.md`** | ~8.5 KB | ~195 | Master project documentation featuring overview, system architecture diagram, benchmark metrics, quickstart instructions, and schema definitions. |
 | **`.gitignore`** | 313 B | 29 | Excludes local vector storage (`chroma_db/`), large raw datasets (`*.parquet`), Python bytecode caches (`__pycache__/`, `*.pyc`), environment configurations (`.env`), and IDE settings. |
 | **`LICENSE`** | 1.08 KB | 21 | Open-source MIT software license governing usage of the Legal Lens application and data utilities. |
-| **`requirements.txt`** | 63 B | 4 | Declares core Python runtime dependencies: `chromadb>=1.5.0`, `requests>=2.31.0`, `tqdm>=4.66.0`, and `rank_bm25>=0.2.2`. |
-| **`files.md`** | 16.5 KB | 181 | Current master file indexing all directories, files, schemas, and pipeline responsibilities. |
+| **`requirements.txt`** | 98 B | 6 | Declares core Python runtime dependencies: `chromadb>=1.5.0`, `requests>=2.31.0`, `tqdm>=4.66.0`, `rank_bm25>=0.2.2`, `fastapi>=0.110.0`, and `uvicorn>=0.28.0`. |
+| **`files.md`** | 17.5 KB | 195 | Current master file indexing all directories, files, schemas, and pipeline responsibilities. |
+| **`api/main.py`** | 4.8 KB | 135 | FastAPI application exposing `/health`, `/sources`, and `/retrieve` endpoints with CORS and Ollama error handling. |
+| **`orchestrator/evidence.py`** | 3.2 KB | 88 | Aggregates legal retrieval chunks, tags evidence with `[L1]..[L5]`, detects query language (Devanagari ratio > 0.3), and calculates confidence flags. |
+| **`orchestrator/prompt.py`** | 6.8 KB | 170 | Constructs strictly grounded system and user prompts enforcing evidence hierarchy (LAW > QA > WEB), Part IV directive principles guidance, and low-confidence fallback. |
+| **`orchestrator/llm.py`** | 5.8 KB | 196 | Lightweight wrapper around `google-genai` SDK for model `gemma-4-26b-a4b-it`, reading `GEMINI_API_KEY` from `.env` without printing. Implements `generate`, `generate_stream`, single retry on 429/500/504 with 3s pause, and clean `LLMError`. |
+| **`orchestrator/web.py`** | 7.4 KB | 228 | Web evidence module querying `gemma-4-26b-a4b-it` with Google Search tool. Reads URLs exclusively from grounding metadata, filters sources to `.gov.in`, `.nic.in` and allowlist, logs dropped sources, and enforces 10s hard timeout. |
+| **`orchestrator/show_prompt.py`** | 3.1 KB | 85 | CLI demonstration tool showing fully assembled prompts across 5 English, Hindi, and out-of-scope benchmark queries without invoking an LLM. |
+| **`scripts/latency_test.py`** | 6.5 KB | 185 | Latency benchmark running 3 iterations across Non-streaming, Streaming (measuring TTFT), and Minimal Thinking (`ThinkingLevel.MINIMAL`) on real grounded prompts. |
+| **`scripts/test_web.py`** | 4.5 KB | 115 | Grounded web search test harness testing 10s hard timeout enforcement and domain allowlist filtering on legal query benchmarks. |
 
 ---
 
