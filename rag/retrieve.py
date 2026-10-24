@@ -269,11 +269,59 @@ def _init_corpus_and_indexes() -> Tuple[
             metadata={"hnsw:space": "cosine"},
         )
 
-    return records, by_id, by_section, bm25, collection
+    known_jurisdictions: Dict[str, str] = {}
+    for r in records:
+        jur = (r.get("jurisdiction") or "").strip()
+        if jur:
+            known_jurisdictions[jur.lower()] = jur
+
+    return records, by_id, by_section, bm25, collection, known_jurisdictions
 
 
 # Load corpus once at import
-CORPUS_RECORDS, CORPUS_BY_ID, CORPUS_BY_SECTION, BM25_INDEX, CHROMA_COLLECTION = _init_corpus_and_indexes()
+CORPUS_RECORDS, CORPUS_BY_ID, CORPUS_BY_SECTION, BM25_INDEX, CHROMA_COLLECTION, KNOWN_JURISDICTIONS = _init_corpus_and_indexes()
+
+
+# ==============================================================================
+# Filtering Helper
+# ==============================================================================
+
+def is_record_eligible(
+    r: Dict[str, Any],
+    sources: Optional[List[str]] = None,
+    state: Optional[str] = None,
+    tier: Optional[str] = None,
+) -> bool:
+    """
+    Evaluates whether a corpus record meets the filtering criteria for
+    sources, state jurisdiction, or a specific retrieval tier.
+    """
+    r_source = r.get("source", "")
+    r_jur = (r.get("jurisdiction") or "").strip()
+    r_jur_lower = r_jur.lower()
+
+    if tier == "constitution":
+        return r_source == "Constitution of India"
+    elif tier == "central":
+        return r_jur_lower == "india" and r_source != "Constitution of India"
+    elif tier == "state":
+        if not state:
+            return False
+        canon_state = KNOWN_JURISDICTIONS.get(state.strip().lower())
+        if not canon_state or canon_state.lower() == "india":
+            return False
+        return r_jur_lower == canon_state.lower()
+    else:
+        # Standard retrieve() mode
+        if sources:
+            canonical_sources = normalize_source_filter(sources)
+            if canonical_sources and r_source not in canonical_sources:
+                return False
+        if state is not None:
+            target_state_lower = state.strip().lower()
+            if r_jur_lower != target_state_lower and r_jur_lower != "india":
+                return False
+        return True
 
 
 # ==============================================================================
@@ -306,21 +354,52 @@ def vector_search(
     query: str,
     k_vec: int = 20,
     sources: Optional[List[str]] = None,
+    state: Optional[str] = None,
+    tier: Optional[str] = None,
 ) -> List[Tuple[str, int, float]]:
     """
     Performs dense vector retrieval against ChromaDB collection.
+    Supports filtering by canonical sources, state jurisdiction, and retrieval tier.
     Returns: list of (doc_id, rank, cosine_dist) where rank is 1-indexed.
     """
     query_vector = embed_query_ollama(query)
 
     n_results = min(k_vec, len(CORPUS_RECORDS)) if CORPUS_RECORDS else k_vec
     canonical_sources = normalize_source_filter(sources)
+
+    where_clauses: List[Dict[str, Any]] = []
+
+    if tier == "constitution":
+        where_clauses.append({"source": "Constitution of India"})
+    elif tier == "central":
+        where_clauses.append({"jurisdiction": "India"})
+        where_clauses.append({"source": {"$ne": "Constitution of India"}})
+    elif tier == "state":
+        if not state:
+            return []
+        canon_state = KNOWN_JURISDICTIONS.get(state.strip().lower())
+        if not canon_state or canon_state.lower() == "india":
+            return []
+        where_clauses.append({"jurisdiction": canon_state})
+    else:
+        # Standard retrieve() mode
+        if canonical_sources:
+            if len(canonical_sources) == 1:
+                where_clauses.append({"source": canonical_sources[0]})
+            else:
+                where_clauses.append({"source": {"$in": canonical_sources}})
+        if state is not None:
+            canon_state = KNOWN_JURISDICTIONS.get(state.strip().lower(), state.strip())
+            if canon_state.lower() == "india":
+                where_clauses.append({"jurisdiction": "India"})
+            else:
+                where_clauses.append({"jurisdiction": {"$in": [canon_state, "India"]}})
+
     where_filter = None
-    if canonical_sources:
-        if len(canonical_sources) == 1:
-            where_filter = {"source": canonical_sources[0]}
-        else:
-            where_filter = {"source": {"$in": canonical_sources}}
+    if len(where_clauses) == 1:
+        where_filter = where_clauses[0]
+    elif len(where_clauses) > 1:
+        where_filter = {"$and": where_clauses}
 
     query_args: Dict[str, Any] = {
         "query_embeddings": [query_vector],
@@ -353,6 +432,8 @@ def bm25_search(
     query: str,
     k_bm25: int = 20,
     sources: Optional[List[str]] = None,
+    state: Optional[str] = None,
+    tier: Optional[str] = None,
 ) -> List[Tuple[str, int, float]]:
     """
     Performs BM25 search over corpus (title + text).
@@ -363,14 +444,12 @@ def bm25_search(
         return []
 
     scores = BM25_INDEX.get_scores(tokens)
-    canonical_sources = normalize_source_filter(sources)
 
-    # Filter by source if requested
+    # Filter by source, state, tier if requested
     filtered_indices = []
     for idx, r in enumerate(CORPUS_RECORDS):
-        if canonical_sources:
-            if r.get("source") not in canonical_sources:
-                continue
+        if not is_record_eligible(r, sources=sources, state=state, tier=tier):
+            continue
         if scores[idx] > 0.0:
             filtered_indices.append((idx, scores[idx]))
 
@@ -387,41 +466,32 @@ def bm25_search(
 
 
 # ==============================================================================
-# Main Hybrid Retrieval Function
+# Main Hybrid Retrieval Functions
 # ==============================================================================
 
-def retrieve(
+def _retrieve_core(
     query: str,
     k: int = 5,
     sources: Optional[List[str]] = None,
+    state: Optional[str] = None,
+    tier: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Retrieves top k legal documents using hybrid vector + BM25 search,
-    weighted Reciprocal Rank Fusion, safe multi-source explicit citation boosting,
-    and full canonical metadata enrichment.
-
-    Args:
-        query: User search query in English or Hindi.
-        k: Number of top results to return (default: 5).
-        sources: Optional list of source strings to filter.
-
-    Returns:
-        List of dicts: id, source, section, title, text, score, similarity, confident,
-                       citation, parent_act, status, text_as_on.
+    Core hybrid vector + BM25 retrieval engine with RRF fusion, explicit reference
+    boosting, and section-collapsing logic, parameterized by sources, state, and tier.
     """
     canonical_sources = normalize_source_filter(sources)
 
     # 1. Vector Search (top 20)
-    vec_results = vector_search(query, k_vec=20, sources=canonical_sources)
+    vec_results = vector_search(query, k_vec=20, sources=canonical_sources, state=state, tier=tier)
     vec_ranks: Dict[str, int] = {doc_id: rank for doc_id, rank, _ in vec_results}
     vec_sims: Dict[str, float] = {doc_id: round(1.0 - dist, 4) for doc_id, _, dist in vec_results}
 
     # 2. Keyword Search (BM25 top 20)
-    bm25_results = bm25_search(query, k_bm25=20, sources=canonical_sources)
+    bm25_results = bm25_search(query, k_bm25=20, sources=canonical_sources, state=state, tier=tier)
     bm25_ranks: Dict[str, int] = {doc_id: rank for doc_id, rank, _ in bm25_results}
 
     # 3. Reciprocal Rank Fusion (RRF)
-    # Weights: Vector side weighted higher (about 2x BM25)
     rrf_k = 60.0
     weight_vector = 2.0
     weight_bm25 = 1.0
@@ -445,11 +515,6 @@ def retrieve(
     )
 
     # 4. Multi-Source Explicit Reference Boost
-    # "Article N" boosts only the Constitution.
-    # "Section N" / "Rule N" can now match several acts:
-    #   - If more than one source matches, do NOT force rank 1: give each match a moderate boost instead.
-    #   - Only force rank 1 when exactly one chunk matches, or when the query also names the act
-    #     (e.g. "Rent Control Act section 16" or "MRCA 16").
     explicit_ref = extract_explicit_reference(query)
     detected_act = detect_act_in_query(query)
 
@@ -457,6 +522,12 @@ def retrieve(
         ref_type, ref_num = explicit_ref
         target_section_key = f"{ref_type} {ref_num}".lower()
         matching_chunks = list(CORPUS_BY_SECTION.get(target_section_key, []))
+
+        # Filter candidate matching chunks to eligible ones
+        matching_chunks = [
+            c for c in matching_chunks
+            if is_record_eligible(c, sources=sources, state=state, tier=tier)
+        ]
 
         # "Article N" boosts only the Constitution of India
         if ref_type == "article":
@@ -466,19 +537,10 @@ def retrieve(
         if detected_act:
             matching_chunks = [c for c in matching_chunks if c.get("source") == detected_act]
 
-        # If sources filter was passed, filter candidates to allowed sources
-        if canonical_sources:
-            matching_chunks = [c for c in matching_chunks if c.get("source") in canonical_sources]
-
         if matching_chunks:
             distinct_sources = {c.get("source") for c in matching_chunks}
 
-            # Condition to force rank 1:
-            # - Exactly one chunk matches, OR
-            # - Exactly one source matches and query explicitly named the act, OR
-            # - Only one source in the corpus has this section/rule
             if len(distinct_sources) == 1 or detected_act is not None or len(matching_chunks) == 1:
-                # Force rank 1
                 matching_chunks_sorted = sorted(matching_chunks, key=lambda x: x["id"])
                 top_match_id = matching_chunks_sorted[0]["id"]
 
@@ -489,21 +551,17 @@ def retrieve(
                 max_curr_score = max(rrf_scores.values()) if rrf_scores else 0.05
                 rrf_scores[top_match_id] = max_curr_score + 1.0
 
-                # Also give moderate boost to subordinate parts of the same section if split
                 for extra_part in matching_chunks_sorted[1:]:
                     part_id = extra_part["id"]
                     rrf_scores[part_id] = rrf_scores.get(part_id, 0.0) + 0.1
                     if part_id not in sorted_candidates:
                         sorted_candidates.append(part_id)
             else:
-                # Multiple sources match and query did NOT specify an act:
-                # Do NOT force rank 1: give each match a moderate boost instead.
                 moderate_boost = 0.025
                 for c in matching_chunks:
                     cid = c["id"]
                     rrf_scores[cid] = rrf_scores.get(cid, 0.0) + moderate_boost
 
-                # Re-sort candidates based on the updated RRF scores
                 sorted_candidates = sorted(
                     all_candidate_ids,
                     key=lambda doc_id: rrf_scores.get(doc_id, 0.0),
@@ -511,11 +569,6 @@ def retrieve(
                 )
 
     # 5. Collapse Split Sections & Format Top K Results
-    # If several chunks from the same section (ids like mrca1999-s16-p1, -p2) appear in the results,
-    # merge them into ONE result placed at the best-ranked part's position.
-    # text = matched parts concatenated in order (cap about 6000 chars),
-    # id = the section-level id, plus "matched_parts": [...].
-    # Distinct sections fill the top-k. Keep similarity as the best part's similarity.
     section_groups: Dict[Tuple[str, str], Dict[str, Any]] = {}
     ordered_sec_keys: List[Tuple[str, str]] = []
 
@@ -534,6 +587,7 @@ def retrieve(
         if sec_key not in section_groups:
             ordered_sec_keys.append(sec_key)
             base_title = re.sub(r"\s*\(Part\s*\d+\)$", "", record.get("title", ""))
+            default_jur = "India" if source_name == "Constitution of India" else ""
             section_groups[sec_key] = {
                 "id": sec_level_id,
                 "source": source_name,
@@ -543,6 +597,7 @@ def retrieve(
                 "parent_act": record.get("parent_act") or "",
                 "status": record.get("status") or "",
                 "text_as_on": record.get("text_as_on") or "",
+                "jurisdiction": record.get("jurisdiction") or default_jur,
                 "best_score": score_val,
                 "best_sim": sim_val,
                 "matched_parts": [doc_id],
@@ -588,6 +643,7 @@ def retrieve(
             "parent_act": group["parent_act"],
             "status": group["status"],
             "text_as_on": group["text_as_on"],
+            "jurisdiction": group["jurisdiction"],
             "text": merged_text,
             "score": round(group["best_score"], 6),
             "similarity": sim_val,
@@ -598,6 +654,69 @@ def retrieve(
         results.append(result_item)
 
     return results
+
+
+def retrieve(
+    query: str,
+    k: int = 5,
+    sources: Optional[List[str]] = None,
+    state: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves top k legal documents using hybrid vector + BM25 search,
+    weighted Reciprocal Rank Fusion, safe multi-source explicit citation boosting,
+    and full canonical metadata enrichment.
+
+    Args:
+        query: User search query in English or Hindi.
+        k: Number of top results to return (default: 5).
+        sources: Optional list of source strings to filter.
+        state: Optional state name (e.g. 'Maharashtra'). When given, only records
+               with jurisdiction == state or 'India' are eligible. When None,
+               keeps default behaviour (no jurisdiction filter), preserving eval compatibility.
+
+    Returns:
+        List of dicts: id, source, section, title, text, score, similarity, confident,
+                       citation, parent_act, status, text_as_on, jurisdiction.
+    """
+    return _retrieve_core(query=query, k=k, sources=sources, state=state, tier=None)
+
+
+def retrieve_tiered(
+    query: str,
+    state: Optional[str] = None,
+    k_const: int = 2,
+    k_central: int = 3,
+    k_state: int = 3,
+    k_qa: int = 2,
+) -> Dict[str, Any]:
+    """
+    Executes tiered hybrid retrieval partitioned by legal authority:
+      - "constitution": Constitution of India records (top k_const)
+      - "central": jurisdiction 'India', excluding Constitution of India (top k_central)
+      - "state": jurisdiction == state (excluding India; empty if state not covered) (top k_state)
+      - "qa": community/extracted QA pairs (if available; empty if skipped) (top k_qa)
+      - "any_confident": True if any result across all tiers meets confidence threshold
+
+    Each tier applies dedicated hybrid ranking and section-collapsing logic.
+    Returns:
+        Dict with keys: "constitution", "central", "state", "qa", "any_confident".
+    """
+    const_res = _retrieve_core(query=query, k=k_const, tier="constitution")
+    central_res = _retrieve_core(query=query, k=k_central, tier="central")
+    state_res = _retrieve_core(query=query, k=k_state, state=state, tier="state") if state else []
+    qa_res: List[Dict[str, Any]] = []
+
+    all_results = const_res + central_res + state_res + qa_res
+    any_confident = any(r.get("confident", False) for r in all_results)
+
+    return {
+        "constitution": const_res,
+        "central": central_res,
+        "state": state_res,
+        "qa": qa_res,
+        "any_confident": any_confident,
+    }
 
 
 # ==============================================================================
@@ -617,6 +736,17 @@ def main() -> None:
         help="Optional source filter (can be specified multiple times)",
     )
     parser.add_argument(
+        "--state",
+        type=str,
+        default=None,
+        help="Optional state jurisdiction filter (e.g. 'Maharashtra')",
+    )
+    parser.add_argument(
+        "--tiered",
+        action="store_true",
+        help="Execute tiered retrieval (constitution, central, state, qa)",
+    )
+    parser.add_argument(
         "--preview-len",
         type=int,
         default=200,
@@ -626,30 +756,65 @@ def main() -> None:
     args = parser.parse_args()
 
     t0 = time.time()
-    results = retrieve(query=args.query, k=args.k, sources=args.sources)
-    elapsed = time.time() - t0
+    if args.tiered:
+        tiered_res = retrieve_tiered(query=args.query, state=args.state)
+        elapsed = time.time() - t0
 
-    print(f"\n{'='*75}")
-    print(f"🔍 Query: \"{args.query}\"")
-    print(f"⏱️ Retrieval Time: {elapsed:.3f} seconds | Returned: {len(results)} results")
-    print(f"{'='*75}")
+        print(f"\n{'='*75}")
+        print(f"🔍 Tiered Query: \"{args.query}\" | State: {args.state or 'None'}")
+        print(f"⏱️ Retrieval Time: {elapsed:.3f} seconds | Any Confident: {tiered_res['any_confident']}")
+        print(f"{'='*75}")
 
-    for rank, res in enumerate(results, 1):
-        clean_text = res["text"].replace("\n", " ").strip()
-        if len(clean_text) > args.preview_len:
-            clean_text = clean_text[:args.preview_len] + "..."
+        for tier_name in ["constitution", "central", "state", "qa"]:
+            tier_items = tiered_res.get(tier_name, [])
+            print(f"\n📂 Tier: [{tier_name.upper()}] ({len(tier_items)} results)")
+            print("-" * 75)
+            if not tier_items:
+                print("   (No matching records in this tier)")
+                continue
 
-        sim_str = f"{res['similarity']:.4f}" if res["similarity"] is not None else "N/A (BM25 only)"
-        conf_str = "✅ Confident" if res["confident"] else "⚠️ Low Confidence"
-        parts_info = f" [Merged parts: {', '.join(res['matched_parts'])}]" if len(res.get("matched_parts", [])) > 1 else ""
+            for rank, res in enumerate(tier_items, 1):
+                clean_text = res["text"].replace("\n", " ").strip()
+                if len(clean_text) > args.preview_len:
+                    clean_text = clean_text[:args.preview_len] + "..."
 
-        print(f"[{rank}] {res['citation']} (RRF: {res['score']}, Sim: {sim_str}) [{conf_str}]{parts_info}")
-        print(f"    ID     : {res['id']}")
-        print(f"    Part   : {res.get('part_title')}")
-        print(f"    Title  : {res['title']}")
-        print(f"    Snippet: {clean_text}")
-        print("-" * 75)
+                sim_str = f"{res['similarity']:.4f}" if res["similarity"] is not None else "N/A"
+                conf_str = "✅ Confident" if res["confident"] else "⚠️ Low Confidence"
+                parts_info = f" [Merged parts: {', '.join(res['matched_parts'])}]" if len(res.get("matched_parts", [])) > 1 else ""
+
+                print(f"[{rank}] {res['citation']} (RRF: {res['score']}, Sim: {sim_str}) [{conf_str}]{parts_info}")
+                print(f"    Jurisdiction: {res.get('jurisdiction')}")
+                print(f"    ID          : {res['id']}")
+                print(f"    Title       : {res['title']}")
+                print(f"    Snippet     : {clean_text}")
+                print("-" * 50)
+    else:
+        results = retrieve(query=args.query, k=args.k, sources=args.sources, state=args.state)
+        elapsed = time.time() - t0
+
+        print(f"\n{'='*75}")
+        print(f"🔍 Query: \"{args.query}\" | State Filter: {args.state or 'None'}")
+        print(f"⏱️ Retrieval Time: {elapsed:.3f} seconds | Returned: {len(results)} results")
+        print(f"{'='*75}")
+
+        for rank, res in enumerate(results, 1):
+            clean_text = res["text"].replace("\n", " ").strip()
+            if len(clean_text) > args.preview_len:
+                clean_text = clean_text[:args.preview_len] + "..."
+
+            sim_str = f"{res['similarity']:.4f}" if res["similarity"] is not None else "N/A (BM25 only)"
+            conf_str = "✅ Confident" if res["confident"] else "⚠️ Low Confidence"
+            parts_info = f" [Merged parts: {', '.join(res['matched_parts'])}]" if len(res.get("matched_parts", [])) > 1 else ""
+
+            print(f"[{rank}] {res['citation']} (RRF: {res['score']}, Sim: {sim_str}) [{conf_str}]{parts_info}")
+            print(f"    Jurisdiction: {res.get('jurisdiction')}")
+            print(f"    ID          : {res['id']}")
+            print(f"    Part        : {res.get('part_title')}")
+            print(f"    Title       : {res['title']}")
+            print(f"    Snippet     : {clean_text}")
+            print("-" * 75)
 
 
 if __name__ == "__main__":
     main()
+

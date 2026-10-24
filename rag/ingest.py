@@ -200,6 +200,7 @@ def ingest_to_chroma(
                     "title": str(r.get("title", "")),
                     "lang": str(r.get("lang", "en")),
                     "type": str(r.get("type", "article")),
+                    "jurisdiction": str(r.get("jurisdiction", "India")),
                     "part_title": str(r.get("part_title") or ""),
                     "tags": tags_str,
                     "plain_summary": str(r.get("plain_summary") or ""),
@@ -389,6 +390,19 @@ def main() -> None:
     print(f"• Collection total count : {collection_count}")
     print(f"• Total execution time   : {total_time:.2f} seconds ({total_time / 60:.2f} minutes)")
     print(f"• Throughput             : {len(records) / total_time:.2f} records/second")
+
+    # Breakdown per jurisdiction and per type
+    from collections import Counter
+    jur_counts = Counter(r.get("jurisdiction", "India") for r in records)
+    type_counts = Counter(r.get("type", "article") for r in records)
+
+    print(f"\n📊 Chunk Counts per Jurisdiction ({len(jur_counts)} total):")
+    for jur, cnt in sorted(jur_counts.items(), key=lambda x: (-x[1], x[0])):
+        print(f"   • {jur:<22} : {cnt:3d} chunks")
+
+    print(f"\n📊 Chunk Counts per Type ({len(type_counts)} total):")
+    for tp, cnt in sorted(type_counts.items(), key=lambda x: (-x[1], x[0])):
+        print(f"   • {tp:<22} : {cnt:3d} chunks")
 
     # 3. Test queries
     if not args.skip_tests:

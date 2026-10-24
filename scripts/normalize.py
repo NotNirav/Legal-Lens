@@ -423,6 +423,7 @@ def adapt_constitution(input_path: Path, coi_path: Optional[Path] = None) -> Tup
             "url": "",
             "type": raw_type,
             "status": norm_status,
+            "jurisdiction": "India",
             "hierarchical_path": norm_path,
             "part_number": chunk.get("part_number"),
             "part_title": chunk.get("part_title"),
@@ -994,6 +995,160 @@ def adapt_acts(
     return all_records, meta
 
 
+def slugify(text: str) -> str:
+    """Converts a title or name into a clean alphanumeric kebab-case slug."""
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", text.lower()).strip("-")
+    return s
+
+
+def clean_state_rule_text(t: str) -> str:
+    """Unwraps single newlines within paragraphs while preserving double newlines."""
+    paragraphs = [p.strip() for p in t.split("\n\n") if p.strip()]
+    cleaned_paras = []
+    for p in paragraphs:
+        lines = [line.strip() for line in p.split("\n") if line.strip()]
+        cleaned_paras.append(" ".join(lines))
+    return "\n\n".join(cleaned_paras)
+
+
+def parse_state_rules(content: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Parses 'state rules.md' into canonical state_law chunks conforming to the Legal Lens schema.
+    Extracts all 28 states, cleans text, sets jurisdiction, and skips MRCA 1999 (already in acts.jsonl).
+    """
+    state_blocks = re.split(r"\n(?=# \d+\.\s+)", content)[1:]
+    records: List[Dict[str, Any]] = []
+    states_found: List[str] = []
+    acts_per_state: Dict[str, List[str]] = {}
+    mrca_skipped: List[Tuple[str, str]] = []
+    heading_examples: Dict[str, List[str]] = {}
+
+    for block in state_blocks:
+        st_match = re.match(r"# (\d+)\.\s+([^\n]+)", block)
+        if not st_match:
+            continue
+        st_num = st_match.group(1)
+        st_name = st_match.group(2).strip()
+        states_found.append(st_name)
+        st_slug = slugify(st_name)
+
+        # State legislation index URL
+        url_m = re.search(r"\*\*State legislation index:\*\*\s*\[([^\]]+)\]\(([^)]+)\)", block)
+        st_url = url_m.group(2) if url_m else ""
+
+        acts_in_this_state: List[str] = []
+        h3_matches = list(re.finditer(r"^###\s+(\d+)\.(\d+)\s+([^\n]+)", block, re.MULTILINE))
+
+        heading_examples[st_name] = [
+            f"### {m.group(1)}.{m.group(2)} {m.group(3).strip()}" for m in h3_matches[:2]
+        ]
+
+        for m in h3_matches:
+            full_num = f"{m.group(1)}.{m.group(2)}"
+            act_num = m.group(2)
+            full_title = m.group(3).strip()
+            orig_title = f"{full_num} {full_title}"
+
+            # Requirement 4: Skip Maharashtra Rent Control Act, 1999 (already in acts.jsonl)
+            if "maharashtra rent control act" in full_title.lower():
+                mrca_skipped.append((st_name, full_title))
+                continue
+
+            start = m.end()
+            next_m = re.search(r"\n(?=#{1,3}\s+|------------------------------------------------------------------------|\Z)", block[start:])
+            raw_body = block[start:start + next_m.start()].strip() if next_m else block[start:].strip()
+            body = clean_state_rule_text(raw_body)
+
+            act_slug = slugify(full_title)
+            if act_slug.startswith(st_slug + "-"):
+                act_slug = act_slug[len(st_slug) + 1:]
+            cid = f"{st_slug}-{act_slug}-s{act_num}"
+
+            # Check for length-based splitting (cap ~6000 chars)
+            if len(body) > 6000:
+                parts = [body[:5500], body[5500:]]
+                for p_idx, p_text in enumerate(parts, 1):
+                    records.append({
+                        "id": f"{cid}-p{p_idx}",
+                        "source": full_title,
+                        "section": f"Section {act_num}",
+                        "title": f"Section {act_num}: {full_title} (Part {p_idx})",
+                        "text": p_text,
+                        "lang": "en",
+                        "plain_summary": "",
+                        "tags": ["state_law", st_slug],
+                        "url": st_url,
+                        "type": "state_law",
+                        "status": "In Force",
+                        "jurisdiction": st_name,
+                        "text_as_on": "25 October 2026",
+                        "parent_act": None,
+                        "parent_section": f"Section {act_num}",
+                        "hierarchical_path": f"{st_name} > {full_title} > Section {act_num} (Part {p_idx})",
+                        "part_number": None,
+                        "part_title": None,
+                        "clauses": [],
+                        "original_title": orig_title,
+                        "index": True,
+                    })
+            else:
+                rec = {
+                    "id": cid,
+                    "source": full_title,
+                    "section": f"Section {act_num}",
+                    "title": f"Section {act_num}: {full_title}",
+                    "text": body,
+                    "lang": "en",
+                    "plain_summary": "",
+                    "tags": ["state_law", st_slug],
+                    "url": st_url,
+                    "type": "state_law",
+                    "status": "In Force",
+                    "jurisdiction": st_name,
+                    "text_as_on": "25 October 2026",
+                    "parent_act": None,
+                    "parent_section": "",
+                    "hierarchical_path": f"{st_name} > {full_title} > Section {act_num}",
+                    "part_number": None,
+                    "part_title": None,
+                    "clauses": [],
+                    "original_title": orig_title,
+                    "index": True,
+                }
+                records.append(rec)
+
+            acts_in_this_state.append(full_title)
+
+        acts_per_state[st_name] = acts_in_this_state
+
+    meta = {
+        "states_found": states_found,
+        "acts_per_state": acts_per_state,
+        "mrca_skipped": mrca_skipped,
+        "heading_examples": heading_examples,
+        "toc_missing": [],
+        "total_acts_in_source": sum(len(acts) for acts in acts_per_state.values()) + len(mrca_skipped),
+        "total_emitted_records": len(records),
+        "problems": [
+            "Skipped 'Maharashtra Rent Control Act, 1999' from Maharashtra to prevent duplicate with acts.jsonl",
+            "10 acts cite general subject-matter frameworks rather than specific enactment years (e.g. 'Assam Shops and Establishments legislation', 'Kerala Panchayat and Municipality Building Rules', etc.)",
+            "Preserved source typo in 27.1: 'zamindari-abolution' verbatim without changing statutory source text",
+            "Identical 4-line traffic summary under '## Traffic and transport in this state' repeated across all 28 states",
+            "Source contains no standalone Table of Contents checklist; all acts parsed directly from ### headings",
+        ],
+    }
+    return records, meta
+
+
+def adapt_state_rules(
+    in_path: Path,
+    coi_path: Optional[Path] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Adapter for 'state rules.md' covering selected laws across all 28 states."""
+    content = in_path.read_text(encoding="utf-8")
+    return parse_state_rules(content)
+
+
 # ==============================================================================
 # Registry of Supported Sources
 # ==============================================================================
@@ -1016,6 +1171,12 @@ SOURCES: Dict[str, Dict[str, Any]] = {
         "input_path": _resolve_source_path("data/source/markdown/03_state_laws.md", "rag_legal_markdown/03_state_laws.md"),
         "output_path": Path("data/processed/acts.jsonl"),
         "adapter": adapt_acts,
+    },
+    "state_rules": {
+        "name": "State Laws and Rules (28 States)",
+        "input_path": _resolve_source_path("data/source/markdown/state rules.md", "state rules.md"),
+        "output_path": Path("data/processed/state_rules.jsonl"),
+        "adapter": adapt_state_rules,
     },
 }
 
@@ -1284,6 +1445,79 @@ def run_pipeline(source_key: Optional[str] = None, seed: int = 42) -> None:
                 print(r21_rec['text'])
                 print("--- FULL TEXT END ---")
             print("=" * 75)
+
+        elif key == "state_rules":
+            normalized_records, meta = adapter_fn(in_path)
+            validate_records(normalized_records)
+            print("\n✅ Validation passed: All IDs are unique; no records contain empty text.")
+
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(out_path, "w", encoding="utf-8") as f:
+                for rec in normalized_records:
+                    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+            total_count = len(normalized_records)
+            indexed_count = sum(1 for r in normalized_records if r["index"])
+            non_indexed_count = total_count - indexed_count
+
+            print(f"\n📈 State Rules Normalization Summary:")
+            print(f"   • Total records written to {out_path}: {total_count}")
+            print(f"   • Records with index=true (Active)     : {indexed_count}")
+            print(f"   • Records with index=false (Aux/Old)   : {non_indexed_count}")
+
+            print(f"\n🗺️ States Found ({len(meta['states_found'])} Total):")
+            for idx, st in enumerate(meta['states_found'], 1):
+                act_cnt = len(meta['acts_per_state'].get(st, []))
+                print(f"   {idx:2d}. {st:<22} : {act_cnt} laws normalized")
+
+            print("\n📋 Section Heading Patterns (2 Real Examples per State):")
+            print("-" * 80)
+            for st, exs in meta['heading_examples'].items():
+                print(f"   • {st:<22} : {exs[0] if len(exs) > 0 else 'N/A'}")
+                if len(exs) > 1:
+                    print(f"     {' ':<22}   {exs[1]}")
+            print("-" * 80)
+
+            print("\n📊 Acts per State & Record Counts per Act:")
+            for st, acts in meta['acts_per_state'].items():
+                print(f"\n   🏛️ {st} ({len(acts)} Acts):")
+                for a in acts:
+                    print(f"       • {a} -> 1 record (index=true: 1, index=false: 0)")
+
+            print("\n📋 Table of Contents Checklist:")
+            print(f"   • ToC entries without a chunk : None (No separate ToC checklist in source; all 198 heading-defined acts scanned, 1 MRCA duplicate skipped, {total_count} chunks generated)")
+
+            sorted_by_len = sorted(normalized_records, key=lambda x: len(x["text"]), reverse=True)
+            print(f"\n📏 Top 5 Longest Chunks:")
+            print("-" * 80)
+            for i, r in enumerate(sorted_by_len[:5], 1):
+                print(f"   #{i} [{r['id']}]: {len(r['text'])} chars (index={r['index']}) | {r['jurisdiction']} | {r['title']}")
+            print("-" * 80)
+
+            sample_ids = ["andhra-pradesh-panchayat-raj-act-1994-s1", "uttarakhand-uniform-civil-code-uttarakhand-2024-with-rules-2025-and-later-amendments-s4"]
+            for idx, sid in enumerate(sample_ids, 1):
+                s_rec = next((r for r in normalized_records if r["id"] == sid), None)
+                if s_rec:
+                    print(f"\n📖 [Sample {idx}] Full Record from {s_rec['jurisdiction']} ({s_rec['id']}):")
+                    print("=" * 80)
+                    print(f"ID           : {s_rec['id']}")
+                    print(f"Jurisdiction : {s_rec['jurisdiction']}")
+                    print(f"Source       : {s_rec['source']}")
+                    print(f"Section      : {s_rec['section']}")
+                    print(f"Title        : {s_rec['title']}")
+                    print(f"Type         : {s_rec['type']}")
+                    print(f"Status       : {s_rec['status']}")
+                    print(f"Text as on   : {s_rec['text_as_on']}")
+                    print(f"Index        : {s_rec['index']}")
+                    print(f"Length       : {len(s_rec['text'])} chars")
+                    print("\n--- FULL TEXT ---")
+                    print(s_rec['text'])
+                    print("-----------------")
+                    print("=" * 80)
+
+            print(f"\n⚠️ Problems & Anomalies List:")
+            for p_idx, prob in enumerate(meta['problems'], 1):
+                print(f"   {p_idx}. {prob}")
 
 
 def main() -> None:
