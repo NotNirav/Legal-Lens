@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
-  ArrowRight, Paperclip, Scale, ChevronDown, Check, FileText, X
+  ArrowRight, Paperclip, Scale, ChevronDown, Check, FileText, X,
+  Sparkles, PhoneCall, Shield
 } from 'lucide-react';
 import AudienceSection from './AudienceSection';
 import SampleAnswerPreview from './SampleAnswerPreview';
 import FaqSection from './FaqSection';
-import { translations } from '../data/translations';
 import { DEFAULT_INDIAN_STATES } from '../data/states';
+import { getSources, getStates } from '../lib/api';
 
 const EXAMPLE_QUESTIONS_EN = [
   "Can my landlord deduct my deposit without repair receipts?",
@@ -31,13 +32,43 @@ export default function HomeTab({
   selectedState = 'Maharashtra',
   setSelectedState
 }) {
-  const t = translations[language] || translations.en;
   const [heroInput, setHeroInput] = useState("");
   const [isStateOpen, setIsStateOpen] = useState(false);
   const [attachment, setAttachment] = useState(null);
+  const [dynamicCoverage, setDynamicCoverage] = useState(() => 
+    language === 'hi' 
+      ? 'वर्तमान में शामिल: भारत का संविधान, केंद्रीय अधिनियम एवं 36 राज्यों के नियम।'
+      : 'Currently covers: Constitution of India, Central Acts, Model Codes, and state laws for 36 states & UTs.'
+  );
   const fileInputRef = useRef(null);
 
   const exampleQuestions = language === 'hi' ? EXAMPLE_QUESTIONS_HI : EXAMPLE_QUESTIONS_EN;
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.allSettled([getSources(), getStates()])
+      .then(([sourcesRes, statesRes]) => {
+        if (!isMounted) return;
+        const sources = sourcesRes.status === 'fulfilled' && Array.isArray(sourcesRes.value) ? sourcesRes.value : [];
+        const states = statesRes.status === 'fulfilled' && Array.isArray(statesRes.value) ? statesRes.value : [];
+
+        const sourceNames = sources.map(s => s.source).filter(Boolean);
+        const uniqueSources = Array.from(new Set(sourceNames));
+        const stateCount = states.length > 0 ? states.length : 36;
+
+        if (uniqueSources.length > 0) {
+          const topList = uniqueSources.slice(0, 5).join(', ');
+          const moreCount = uniqueSources.length > 5 ? ` and ${uniqueSources.length - 5} more statutes` : '';
+          setDynamicCoverage(
+            language === 'hi'
+              ? `वर्तमान में शामिल: ${topList}${moreCount} एवं ${stateCount} राज्यों व केंद्र शासित प्रदेशों के कानून।`
+              : `Currently covers: ${topList}${moreCount} and state laws for ${stateCount} states & UTs.`
+          );
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [language]);
 
   const handleHeroSubmit = (e) => {
     if (e) e.preventDefault();
@@ -183,7 +214,7 @@ export default function HomeTab({
                     aria-label={`Select jurisdiction, currently ${selectedState}`}
                   >
                     <Scale size={13} className="text-muted" />
-                    <span>Jurisdiction: <strong>{selectedState}</strong></span>
+                    <span>{language === 'hi' ? 'कार्यक्षेत्र:' : 'Jurisdiction:'} <strong>{selectedState}</strong></span>
                     <ChevronDown size={12} className={`chevron ${isStateOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -256,41 +287,71 @@ export default function HomeTab({
       {/* Target Audiences Section */}
       <AudienceSection 
         onSelectAudience={onSelectAudience}
+        onAskQuestion={onAskQuestion}
         language={language}
       />
 
-      {/* How the Grounded Assistant Works */}
-      <section className="engine-pipeline-section">
+      {/* How the Grounded Assistant Works: 3 Cards in a Row with SVG Icons & Dynamic Coverage */}
+      <section className="engine-pipeline-section" aria-label="How Legal Lens explains your rights">
         <div className="container">
           <div className="pipeline-header-center">
-            <h2 className="pipeline-title">How Legal Lens Explains Your Rights</h2>
-            <p className="pipeline-desc">
-              Grounded in the Constitution of India, Central Acts, and Model Codes — explained in everyday language without expensive attorney retainers.
+            <h2 className="pipeline-title">
+              {language === 'hi' ? 'लीगल लेंस आपके अधिकार कैसे समझाता है' : 'How Legal Lens Explains Your Rights'}
+            </h2>
+            <p className="pipeline-desc dynamic-sources-coverage">
+              {dynamicCoverage}
             </p>
           </div>
 
           <div className="pipeline-cards-row">
             <div className="pipeline-card">
-              <div className="pipeline-card-num">01</div>
-              <h3 className="pipeline-card-heading">Verified Statutory Provisions</h3>
+              <div className="pipeline-card-top">
+                <span className="pipeline-card-num">01</span>
+                <div className="pipeline-card-icon-wrap">
+                  <Scale size={20} className="pipeline-card-icon" />
+                </div>
+              </div>
+              <h3 className="pipeline-card-heading">
+                {language === 'hi' ? 'सत्यापित वैधानिक धाराएं' : 'Verified Statutory Provisions'}
+              </h3>
               <p className="pipeline-card-text">
-                Every right is verified against statutory provisions like the Transfer of Property Act, Payment of Wages Act, and Consumer Protection Act with exact section citations.
+                {language === 'hi'
+                  ? 'प्रत्येक अधिकार की पुष्टि भारतीय संविधान, केंद्रीय संहिताओं और राज्य कानूनों से की जाती है।'
+                  : 'Every right is verified against official statutory provisions with exact section citations and state-level rules.'}
               </p>
             </div>
 
             <div className="pipeline-card">
-              <div className="pipeline-card-num">02</div>
-              <h3 className="pipeline-card-heading">Plain Language Synthesis</h3>
+              <div className="pipeline-card-top">
+                <span className="pipeline-card-num">02</span>
+                <div className="pipeline-card-icon-wrap">
+                  <Sparkles size={20} className="pipeline-card-icon" />
+                </div>
+              </div>
+              <h3 className="pipeline-card-heading">
+                {language === 'hi' ? 'सरल भाषा में विश्लेषण' : 'Plain Language Synthesis'}
+              </h3>
               <p className="pipeline-card-text">
-                Complex legal definitions and procedural rules are translated into clear, reassuring language that any citizen, tenant, or worker can act on immediately.
+                {language === 'hi'
+                  ? 'जटिल कानूनी धाराओं को स्पष्ट और व्यावहारिक भाषा में समझाता है जिसे कोई भी नागरिक तुरंत समझ सके।'
+                  : 'Complex legal definitions and procedural rules are translated into clear, reassuring language that any citizen can act on immediately.'}
               </p>
             </div>
 
             <div className="pipeline-card">
-              <div className="pipeline-card-num">03</div>
-              <h3 className="pipeline-card-heading">Direct Government Channels</h3>
+              <div className="pipeline-card-top">
+                <span className="pipeline-card-num">03</span>
+                <div className="pipeline-card-icon-wrap">
+                  <PhoneCall size={20} className="pipeline-card-icon" />
+                </div>
+              </div>
+              <h3 className="pipeline-card-heading">
+                {language === 'hi' ? 'सीधे सरकारी निवारण पोर्टल' : 'Direct Government Channels'}
+              </h3>
               <p className="pipeline-card-text">
-                Provides direct phone numbers and official grievance portal links for NALSA Free Legal Aid (15100), Consumer Redressal (1915), and MSME Samadhaan.
+                {language === 'hi'
+                  ? 'नालसा मुफ्त कानूनी सहायता (15100), उपभोक्ता हेल्पलाइन (1915), और एमएसएमई समाधान के सीधे संपर्क।'
+                  : 'Provides verified phone numbers and official grievance portal links for NALSA Free Legal Aid (15100), Consumer Redressal (1915), and official portals.'}
               </p>
             </div>
           </div>
@@ -309,24 +370,39 @@ export default function HomeTab({
         language={language}
       />
 
-      {/* Direct Bottom Invitation */}
-      <section className="bottom-launch-section">
+      {/* Direct Bottom Invitation: Centered banner with at least 24px spacing */}
+      <section className="bottom-launch-section" aria-label="Ask Legal Lens Invitation">
         <div className="container">
           <div className="bottom-launch-card">
             <div className="bottom-launch-copy">
-              <h2 className="bottom-launch-title">Have a specific legal notice or question?</h2>
+              <h2 className="bottom-launch-title">
+                {language === 'hi' ? 'क्या आपके पास कोई विशिष्ट कानूनी नोटिस या प्रश्न है?' : 'Have a specific legal notice or question?'}
+              </h2>
               <p className="bottom-launch-desc">
-                Get an instant, structured breakdown backed by the Constitution, central acts, and state laws.
+                {language === 'hi'
+                  ? 'संविधान, केंद्रीय संहिताओं और राज्य कानूनों पर आधारित त्वरित, संरचित विश्लेषण प्राप्त करें।'
+                  : 'Get an instant, structured breakdown backed by the Constitution, central acts, and state laws.'}
               </p>
             </div>
             <button
               type="button"
-              className="btn btn-primary btn-lg"
+              className="btn btn-primary btn-lg bottom-launch-btn"
               onClick={() => setActiveTab('query')}
+              aria-label="Start inquiry in Counsel"
             >
-              <span>Ask Legal Lens</span>
+              <span>{language === 'hi' ? 'लीगल लेंस से पूछें' : 'Ask Legal Lens'}</span>
               <ArrowRight size={16} />
             </button>
+          </div>
+
+          {/* Small Footer Disclaimer on Home */}
+          <div className="home-legal-disclaimer-strip" role="note">
+            <Shield size={14} className="disclaimer-shield-icon" />
+            <span>
+              {language === 'hi'
+                ? 'सामान्य कानूनी जानकारी, औपचारिक वकील प्रतिनिधित्व नहीं। भारतीय संविधान के अनुच्छेद 39A के अंतर्गत।'
+                : 'General information, not legal advice. Under Article 39A of the Constitution of India.'}
+            </span>
           </div>
         </div>
       </section>

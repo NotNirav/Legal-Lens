@@ -18,7 +18,7 @@ export const TARGET_AUDIENCES = [
     subtitle: "Housing & Deposit Security",
     icon: "Home",
     keyStatute: "Model Tenancy Act & State Rent Control Acts",
-    protection: "Mandatory 24-hr entry notice, security deposit capped at 2 months' rent, illegal lockout protection.",
+    protection: "Advance written entry notice requirements, security deposit return safeguards, and legal protection against unlawful eviction or utility disconnection.",
     disputeExample: "Landlord refusing to refund deposit, cutting off electricity/water, or issuing sudden eviction without written notice.",
     prefillQuestion: "My landlord has cut off my water supply and demanded I vacate within 48 hours without returning my security deposit. What are my legal protections?"
   },
@@ -28,7 +28,7 @@ export const TARGET_AUDIENCES = [
     subtitle: "Wages, Safety & Fair Exit",
     icon: "Briefcase",
     keyStatute: "Payment of Wages Act & Industrial Relations Code",
-    protection: "Mandatory wage disbursement by 7th/10th of month, 30 days severance notice or pay in lieu, gratuity entitlement.",
+    protection: "Statutory wage disbursement schedules, mandatory notice before termination or wages in lieu, and statutory gratuity entitlements.",
     disputeExample: "Company abruptly withholding last two months' pay, forced immediate resignations, or refusal to issue service letters.",
     prefillQuestion: "My employer terminated my services abruptly without 30 days notice or severance pay, and is withholding my final salary settlement. How can I legally recover my dues?"
   },

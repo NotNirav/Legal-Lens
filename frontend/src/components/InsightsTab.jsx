@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { searchKnowledgeBase } from '../services/ragService';
 import { translations } from '../data/translations';
+import { askStream } from '../lib/api';
+import SafeMarkdown from '../lib/SafeMarkdown';
 
 // 6 Curated Animated Life Scenes
 const ANIMATED_SCENES = [
@@ -149,12 +151,100 @@ const DAILY_WISDOM_NUGGETS = [
   }
 ];
 
-export default function InsightsTab({ onAskQuestion, language = 'en' }) {
+export default function InsightsTab({ onAskQuestion, language = 'en', selectedState = 'Maharashtra' }) {
   const t = translations[language] || translations.en;
 
   // Scene Carousel State
   const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [showSceneTruth, setShowSceneTruth] = useState(false);
+  const [sceneAnswers, setSceneAnswers] = useState({});
+
+  const handleRevealScene = (scene) => {
+    setShowSceneTruth(true);
+    if (sceneAnswers[scene.id]?.text) {
+      return;
+    }
+
+    setSceneAnswers((prev) => ({
+      ...prev,
+      [scene.id]: {
+        text: '',
+        sources: [],
+        isLoading: true,
+        isFallback: false,
+        isOffline: false,
+      },
+    }));
+
+    try {
+      askStream(
+        {
+          query: scene.prefillQuestion,
+          state: selectedState || 'Maharashtra',
+          lang: language,
+        },
+        {
+          onSources: (sources) => {
+            setSceneAnswers((prev) => ({
+              ...prev,
+              [scene.id]: {
+                ...(prev[scene.id] || {}),
+                sources: sources || [],
+              },
+            }));
+          },
+          onToken: (token) => {
+            setSceneAnswers((prev) => ({
+              ...prev,
+              [scene.id]: {
+                ...(prev[scene.id] || {}),
+                text: ((prev[scene.id]?.text) || '') + token,
+                isLoading: false,
+              },
+            }));
+          },
+          onDone: (donePayload) => {
+            setSceneAnswers((prev) => ({
+              ...prev,
+              [scene.id]: {
+                text: donePayload?.answer || prev[scene.id]?.text || scene.statutoryTruth,
+                sources: donePayload?.sources_cited || prev[scene.id]?.sources || [],
+                isLoading: false,
+                isFallback: Boolean(donePayload?.fallback),
+                isOffline: false,
+              },
+            }));
+          },
+          onError: (err) => {
+            console.warn('Insights /ask API unavailable, falling back to static offline truth:', err);
+            setSceneAnswers((prev) => ({
+              ...prev,
+              [scene.id]: {
+                text: scene.statutoryTruth,
+                sources: [],
+                isLoading: false,
+                isFallback: true,
+                isOffline: true,
+              },
+            }));
+          },
+        },
+        { detach: true, timeout: 30000 }
+      );
+    } catch (err) {
+      console.warn('Insights /ask API invocation failed, using offline fallback:', err);
+      setSceneAnswers((prev) => ({
+        ...prev,
+        [scene.id]: {
+          text: scene.statutoryTruth,
+          sources: [],
+          isLoading: false,
+          isFallback: true,
+          isOffline: true,
+        },
+      }));
+    }
+  };
 
   // 3D Flip Card State
   const [flippedCards, setFlippedCards] = useState({});
@@ -287,13 +377,13 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                 <h4 className="hook-title">{currentScene.funQuestion}</h4>
               </div>
 
-              {/* Revealable Statutory Truth */}
+              {/* Revealable Statutory Truth via /ask Pipeline */}
               <div className="scene-truth-drawer">
                 {!showSceneTruth ? (
                   <button 
                     type="button" 
                     className="btn btn-outline scene-reveal-btn"
-                    onClick={() => setShowSceneTruth(true)}
+                    onClick={() => handleRevealScene(currentScene)}
                   >
                     <Sparkles size={16} className="sparkle-gold" />
                     <span>Reveal What the Law Actually Says</span>
@@ -304,11 +394,53 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                       <CheckCircle size={18} className="text-emerald" />
                       <strong>Statutory Reality Under Indian Law</strong>
                     </div>
-                    <p className="revealed-explanation">{currentScene.statutoryTruth}</p>
-                    <div className="revealed-statute-pill">
-                      <Scale size={14} />
-                      <span>{currentScene.keyArticle}</span>
-                    </div>
+
+                    {sceneAnswers[currentScene.id]?.isLoading && !sceneAnswers[currentScene.id]?.text ? (
+                      <div className="insights-answer-loading">
+                        <div className="insights-loading-header">
+                          <RefreshCw size={15} className="animate-spin text-blue" />
+                          <span>Synthesizing statutory provisions for {selectedState || 'your state'}…</span>
+                        </div>
+                        <div className="skeleton-line" style={{ width: '92%', height: '14px', marginBottom: '8px' }} />
+                        <div className="skeleton-line" style={{ width: '78%', height: '14px', marginBottom: '8px' }} />
+                        <div className="skeleton-line" style={{ width: '56%', height: '14px' }} />
+                      </div>
+                    ) : (
+                      <>
+                        {sceneAnswers[currentScene.id]?.isOffline && (
+                          <div className="offline-example-notice" role="note">
+                            <AlertCircle size={14} className="notice-icon" />
+                            <span>Offline example</span>
+                          </div>
+                        )}
+
+                        <div className="revealed-explanation card-answer-content">
+                          <SafeMarkdown
+                            content={sceneAnswers[currentScene.id]?.text || currentScene.statutoryTruth}
+                            availableTags={sceneAnswers[currentScene.id]?.sources?.map((s) => s.tag)}
+                          />
+                        </div>
+
+                        {sceneAnswers[currentScene.id]?.sources && sceneAnswers[currentScene.id].sources.length > 0 ? (
+                          <div className="insights-sources-cluster">
+                            <span className="insights-sources-label">Cited Authorities:</span>
+                            <div className="insights-sources-tags">
+                              {sceneAnswers[currentScene.id].sources.map((s, idx) => (
+                                <span key={s.tag || idx} className="insight-source-chip">
+                                  <Scale size={12} className="text-muted" />
+                                  <strong>{s.tag}</strong> {s.title || s.statute || s.provision || s.jurisdiction}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="revealed-statute-pill">
+                            <Scale size={14} />
+                            <span>{currentScene.keyArticle}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     <div className="revealed-actions-row">
                       <button 

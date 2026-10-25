@@ -34,7 +34,14 @@ export default function Navbar({
   
   const langRef = useRef(null);
   const stateRef = useRef(null);
+  const stateInputRef = useRef(null);
   const t = translations[language] || translations.en;
+
+  useEffect(() => {
+    if (stateDropdownOpen) {
+      stateInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [stateDropdownOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,7 +72,9 @@ export default function Navbar({
   const handleNavClick = (tabId) => {
     setActiveTab(tabId);
     setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (tabId !== 'query') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleStateSelect = (stName) => {
@@ -73,6 +82,35 @@ export default function Navbar({
     localStorage.setItem('legal_lens_selected_state', stName);
     setStateDropdownOpen(false);
     setStateSearch('');
+  };
+
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        let detected = 'Maharashtra';
+        if (latitude >= 28.0 && latitude <= 29.2 && longitude >= 76.5 && longitude <= 77.8) {
+          detected = 'Delhi';
+        } else if (latitude >= 12.5 && latitude <= 13.8 && longitude >= 77.0 && longitude <= 78.5) {
+          detected = 'Karnataka';
+        } else if (latitude >= 18.2 && latitude <= 20.0 && longitude >= 72.5 && longitude <= 74.0) {
+          detected = 'Maharashtra';
+        } else if (latitude >= 12.8 && latitude <= 13.5 && longitude >= 80.0 && longitude <= 80.5) {
+          detected = 'Tamil Nadu';
+        } else if (latitude >= 22.0 && latitude <= 23.5 && longitude >= 88.0 && longitude <= 88.8) {
+          detected = 'West Bengal';
+        }
+        handleStateSelect(detected);
+      },
+      (error) => {
+        console.warn('Geolocation detection error:', error);
+      },
+      { timeout: 10000 }
+    );
   };
 
   const filteredStates = statesList.filter(s => 
@@ -143,6 +181,16 @@ export default function Navbar({
             <div className="header-state-selector-wrap" ref={stateRef}>
               <button
                 type="button"
+                className="header-detect-location-btn"
+                onClick={handleDetectLocation}
+                title={t.detectLocation || "Detect my location"}
+                aria-label={t.detectLocation || "Detect my location"}
+              >
+                <Globe size={14} />
+              </button>
+
+              <button
+                type="button"
                 className="header-state-trigger"
                 onClick={() => setStateDropdownOpen(prev => !prev)}
                 aria-expanded={stateDropdownOpen}
@@ -159,12 +207,12 @@ export default function Navbar({
                 <div className="header-state-dropdown animate-popover" role="dialog" aria-label="Select state jurisdiction">
                   <div className="state-search-wrap">
                     <input
+                      ref={stateInputRef}
                       type="text"
                       className="state-quick-search-input"
                       placeholder="Search state or UT..."
                       value={stateSearch}
                       onChange={(e) => setStateSearch(e.target.value)}
-                      autoFocus
                       aria-label="Filter state list"
                     />
                   </div>

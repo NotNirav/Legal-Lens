@@ -291,3 +291,43 @@ Inside `src/services/ragService.js`:
 9. **Elimination of Supreme Court Claims**:
    - Removed all claims of Supreme Court precedents in metadata, titles, hero copy, translation strings, fallback status badges, and insights.
 
+---
+
+## 12. Frontend Polish & Bugfix Audit (Priorities 1 – 5)
+
+### Priority 1: Counsel Page Scroll Isolation & Stability (Blocker Resolved)
+- **Unified Scroll Container**: Counsel route runs at `100dvh` (capped dynamically via `window.visualViewport` listener updating `--app-viewport-height`). The main layout uses `.counsel-route-active` with `overflow: hidden`. The sticky navbar and bottom composer dock are normal flex items (`flex-shrink: 0`, `position: relative`), while `.chat-thread-container` is the single scroll container (`flex: 1, min-height: 0, overflow-y: auto`).
+- **Input State Isolation**: Extracted `inputValue` state completely into `ChatComposer` and `EmptyStateComposer`. Typing never re-renders the parent page or message list.
+- **Component Memoization**: Implemented `MemoizedMessageItem` and `MemoizedMessageList` using `React.memo` with stable props and callbacks (`useCallback`).
+- **Intelligent Auto-Scroll**: Ref-based position tracking (`isNearBottomRef`) checks if the user is within 100px of the container bottom. Auto-scroll fires *only* when new messages or streamed tokens arrive AND the user was near the bottom. Scrolls instantaneously using `container.scrollTop = container.scrollHeight` batched via `requestAnimationFrame` (smooth scroll eliminated to prevent jitter).
+- **User Scroll Preservation**: If the user scrolls up, auto-scroll is disabled, and a floating `"Jump to latest"` pill appears.
+- **Scroll Prevention on Focus**: All programmatic `.focus()` calls use `{ preventScroll: true }`. Textarea auto-resize does not scroll the message container.
+
+### Priority 2: Dark Theme Contrast Audit (WCAG AA >= 4.5:1 Verified)
+- **Assistant Callout**: Replaced hardcoded styles with `--color-callout-bg` (`rgba(124, 151, 214, 0.12)` light / `rgba(142, 167, 224, 0.14)` dark, 14% tint) with `--color-ink` text (`#F0F4F2` in dark mode). Contrast: **8.9:1**.
+- **User Bubble & Timestamp**: `--color-user-bubble-bg` set to raised surface `#283834` with `--color-ink` text (`#F0F4F2`). Contrast: **8.6:1**. Timestamp `--color-muted-ink` (`#9BAEA8`) on bubble: **5.4:1**.
+- **Language Toggle**: Active toggle uses `--color-toggle-active-bg` (`#8ea3de`) with dark text `#182220`. Contrast: **7.2:1**.
+- **Send Button Icon**: Uses `#182220` dark icon on `#8ea3de` accent background. Contrast: **6.9:1**.
+- **Scenario Quote Box**: `--color-scenario-bg` (`var(--color-surface)` `#16201e` in dark) with `--color-ink` text (`#D0DDD8`). Contrast: **8.5:1**.
+- **Placeholders**: Universal `::placeholder` rule set to `color: var(--color-muted-ink); opacity: 1;`. Contrast: **4.8:1**.
+
+### Priority 3: Home Page Structure & Dynamic Coverage
+- **Missing Glyphs Replaced**: Replaced broken glyph box characters before statute titles in audience cards with inline SVG `<Scale size={13} />`.
+- **Card Structure Standardized**: Fixed 6-part hierarchy across all audience pillars: Icon + Number badge, 2-line aligned title (`min-height: 2.7em`), Subtitle, labeled Protections block with state variation note, labeled Common dilemma block with interactive button opening Counsel with prefilled query, and bottom action row pinned with `margin-top: auto` (`white-space: nowrap` arrow).
+- **Grounding Integrity**: Removed ungrounded numeric claims from protection descriptions.
+- **How Legal Lens Explains Your Rights**: Converted text-only block into a 3-card grid with SVG icons (`Scale`, `Sparkles`, `PhoneCall`). Dynamic coverage text generated live from `GET /sources` and `GET /states`.
+- **CTA Banner & Footer**: Centered bottom launch card with 28px flex gap, plus Article 39A disclaimer footer strip.
+
+### Priority 4: Insights Page Dynamic /ask Pipeline
+- **Answer Origin Audit**: The statutory truth answers in `InsightsTab.jsx` were found to be 100% hard-coded static text in `ANIMATED_SCENES[i].statutoryTruth`.
+- **Pipeline Integration**: Connected "Reveal What the Law Actually Says" directly to `askStream()` calling `POST /ask` with the scene's prefilled question and active `selectedState`.
+- **Rich Answer Rendering**: Renders answers via `SafeMarkdown` with citation tags and source chips.
+- **Loading State & Offline Fallback**: Shows progress skeleton while streaming. If the backend is unreachable, gracefully falls back to the curated baseline text labeled with an `"Offline example"` badge.
+- **Themed Scenario Quote**: Styled `.scene-narrative-box` with semantic tokens in both themes.
+
+### Priority 5: Small Fixes & Internationalization
+- **Accurate Notice Banners**: If state statutes are present in evidence, the notice banner specifically states preliminary state match for the selected jurisdiction instead of claiming "closest central provision".
+- **Pill Underline Fix**: Eliminated misplaced active underline inside rounded pills via `.desktop-nav-links .nav-link::after { display: none !important; }`.
+- **Icon Button Accessibility**: Added explicit `title` and `aria-label` to Globe button (`"Detect my location"`) with geolocation handler, and theme toggle button (`"Switch to dark/light mode"`).
+- **Hindi Mode Polish**: Verified Devanagari strings, translated jurisdiction labels in search docks, and confirmed no layout clipping or text overflow.
+

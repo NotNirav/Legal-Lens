@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import HomeTab from './components/HomeTab';
 import QueryTab from './components/QueryTab';
-import { Scale, Shield, PhoneCall, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Shield, PhoneCall, AlertTriangle, RotateCcw } from 'lucide-react';
 import { getBaseUrl, subscribeBaseUrl, getHealth, isMixedContentUrl } from './lib/api';
 import './App.css';
 
@@ -59,6 +59,24 @@ function App() {
     localStorage.setItem('legal_lens_theme', theme);
   }, [theme]);
 
+  // Track visualViewport for mobile keyboard awareness on Counsel route
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateViewportHeight = () => {
+      const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      document.documentElement.style.setProperty('--app-viewport-height', `${vh}px`);
+    };
+    updateViewportHeight();
+    window.visualViewport?.addEventListener('resize', updateViewportHeight);
+    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
+    window.addEventListener('resize', updateViewportHeight);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
+      window.removeEventListener('resize', updateViewportHeight);
+    };
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('legal_lens_language', language);
   }, [language]);
@@ -80,7 +98,6 @@ function App() {
   const handleAskQuestion = (questionText) => {
     setPrefillQuestion(questionText);
     setActiveTab('query');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handler when user uploads a document in Document Analysis Section
@@ -93,25 +110,22 @@ function App() {
     });
     setPrefillQuestion(`Please review this uploaded document (${fileObj.detectedType}) and explain my legal rights, statutory notice timelines, and immediate next steps under Indian Law.`);
     setActiveTab('query');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handler when user clicks an Audience Pillar (Citizens, Tenants, Workers, Small Business Owners)
   const handleSelectAudience = (audience) => {
     setPrefillQuestion(audience.prefillQuestion);
     setActiveTab('query');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handler when user clicks "Ask about this" from an Insight/FAQ card
   const handleAskQuestionFromInsight = (questionText) => {
     setPrefillQuestion(`I need legal guidance regarding this situation: "${questionText}". What are my rights and next steps?`);
     setActiveTab('query');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <div className={`app-layout theme-${theme}`}>
+    <div className={`app-layout theme-${theme} ${activeTab === 'query' ? 'counsel-route-active' : ''}`}>
       {/* Top Navbar with State Selector & Language Toggle */}
       <Navbar
         activeTab={activeTab}
@@ -188,6 +202,7 @@ function App() {
             <InsightsTab
               onAskQuestion={handleAskQuestionFromInsight}
               language={language}
+              selectedState={selectedState}
             />
           </Suspense>
         )}
@@ -209,93 +224,97 @@ function App() {
         )}
       </main>
 
-      {/* Discrete Bottom Emergency Helplines Bar */}
-      <aside className="emergency-footer-bar" aria-label="National Legal and Emergency Helplines">
-        <div className="container emergency-footer-content">
-          <div className="emergency-footer-item">
-            <PhoneCall size={14} className="icon-emerald" />
-            <span>NALSA Free Legal Aid: <a href="tel:15100"><strong>15100</strong></a></span>
+      {/* Discrete Bottom Emergency Helplines Bar (Home & Insights only) */}
+      {activeTab !== 'query' && (
+        <aside className="emergency-footer-bar" aria-label="National Legal and Emergency Helplines">
+          <div className="container emergency-footer-content">
+            <div className="emergency-footer-item">
+              <PhoneCall size={14} className="icon-emerald" />
+              <span>NALSA Free Legal Aid: <a href="tel:15100"><strong>15100</strong></a></span>
+            </div>
+            <div className="emergency-footer-item">
+              <PhoneCall size={14} className="icon-blue" />
+              <span>National Cyber Crime: <a href="tel:1930"><strong>1930</strong></a></span>
+            </div>
+            <div className="emergency-footer-item">
+              <PhoneCall size={14} className="icon-amber" />
+              <span>National Consumer Helpline: <a href="tel:1915"><strong>1915</strong></a></span>
+            </div>
+            <div className="emergency-trust-pill">
+              <Shield size={14} className="icon-gold" />
+              <span>24x7 Statutory Helplines</span>
+            </div>
           </div>
-          <div className="emergency-footer-item">
-            <PhoneCall size={14} className="icon-blue" />
-            <span>National Cyber Crime: <a href="tel:1930"><strong>1930</strong></a></span>
-          </div>
-          <div className="emergency-footer-item">
-            <PhoneCall size={14} className="icon-amber" />
-            <span>National Consumer Helpline: <a href="tel:1915"><strong>1915</strong></a></span>
-          </div>
-          <div className="emergency-trust-pill">
-            <Shield size={14} className="icon-gold" />
-            <span>24x7 Statutory Helplines</span>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
-      {/* Editorial Site Footer */}
-      <footer className="site-footer">
-        <div className="container footer-container">
-          <div className="footer-top">
-            <div className="footer-brand">
-              <div className="footer-logo-row">
-                <span className="brand-wordmark">Legal Lens</span>
-                <span className="brand-accent-mark" aria-hidden="true">
-                  <span className="bar bar-red" />
-                  <span className="bar bar-blue" />
-                  <span className="bar bar-yellow" />
-                  <span className="bar bar-pink" />
-                </span>
+      {/* Editorial Site Footer (Home & Insights only) */}
+      {activeTab !== 'query' && (
+        <footer className="site-footer">
+          <div className="container footer-container">
+            <div className="footer-top">
+              <div className="footer-brand">
+                <div className="footer-logo-row">
+                  <span className="brand-wordmark">Legal Lens</span>
+                  <span className="brand-accent-mark" aria-hidden="true">
+                    <span className="bar bar-red" />
+                    <span className="bar bar-blue" />
+                    <span className="bar bar-yellow" />
+                    <span className="bar bar-pink" />
+                  </span>
+                </div>
+                <p className="footer-desc">
+                  An open-source public legal empowerment initiative helping Indian citizens, tenants, workers, and small shop owners understand statutory rights in plain, everyday language.
+                </p>
+                <div className="footer-edition-note">
+                  <span>Hacktoberfest 2026 Edition · Public Legal Literacy Initiative</span>
+                </div>
               </div>
-              <p className="footer-desc">
-                An open-source public legal empowerment initiative helping Indian citizens, tenants, workers, and small shop owners understand statutory rights in plain, everyday language.
+
+              <div className="footer-links-col">
+                <h4>Official Redressal Portals</h4>
+                <ul>
+                  <li><a href="https://nalsa.gov.in" target="_blank" rel="noopener noreferrer">NALSA Free Legal Aid (15100)</a></li>
+                  <li><a href="https://consumerhelpline.gov.in" target="_blank" rel="noopener noreferrer">National Consumer Helpline (1915)</a></li>
+                  <li><a href="https://cybercrime.gov.in" target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting (1930)</a></li>
+                  <li><a href="https://samadhan.labour.gov.in" target="_blank" rel="noopener noreferrer">SAMADHAN Labour Grievance Portal</a></li>
+                  <li><a href="https://edaakhil.nic.in" target="_blank" rel="noopener noreferrer">e-Daakhil Electronic Consumer Filing</a></li>
+                </ul>
+              </div>
+
+              <div className="footer-links-col">
+                <h4>Grounded Legal Corpus</h4>
+                <ul>
+                  <li><span className="footer-stat">Constitution of India (503 Articles)</span></li>
+                  <li><span className="footer-stat">Central Acts &amp; Statutory Codes</span></li>
+                  <li><span className="footer-stat">Model Tenancy &amp; Rent Control Acts</span></li>
+                  <li><span className="footer-stat">Payment of Wages &amp; Industrial Codes</span></li>
+                  <li><span className="footer-stat">MSMED Act Statutory 45-Day Rule</span></li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="footer-bottom">
+              <p className="footer-copy">
+                &copy; 2026 Legal-Lens Project. Non-profit public interest awareness.
               </p>
-              <div className="footer-edition-note">
-                <span>Hacktoberfest 2026 Edition · Public Legal Literacy Initiative</span>
+              <div className="footer-api-pill" title="Active Legal Lens Backend API URL (override via ?api=<url>)">
+                <span className={`api-dot ${healthStatus === 'healthy' ? 'healthy' : healthStatus === 'offline' ? 'offline' : ''}`} />
+                <span>API: <code>{apiUrl}</code></span>
+                {isMixedContentUrl(apiUrl) && (
+                  <span className="mixed-content-warning-pill" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>
+                    ⚠️ Mixed Content
+                  </span>
+                )}
+              </div>
+              <div className="footer-disclaimer-pill">
+                <Shield size={14} />
+                <span>Public Legal Literacy — Not formal attorney representation. Under Article 39A of Constitution of India.</span>
               </div>
             </div>
-
-            <div className="footer-links-col">
-              <h4>Official Redressal Portals</h4>
-              <ul>
-                <li><a href="https://nalsa.gov.in" target="_blank" rel="noopener noreferrer">NALSA Free Legal Aid (15100)</a></li>
-                <li><a href="https://consumerhelpline.gov.in" target="_blank" rel="noopener noreferrer">National Consumer Helpline (1915)</a></li>
-                <li><a href="https://cybercrime.gov.in" target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting (1930)</a></li>
-                <li><a href="https://samadhan.labour.gov.in" target="_blank" rel="noopener noreferrer">SAMADHAN Labour Grievance Portal</a></li>
-                <li><a href="https://edaakhil.nic.in" target="_blank" rel="noopener noreferrer">e-Daakhil Electronic Consumer Filing</a></li>
-              </ul>
-            </div>
-
-            <div className="footer-links-col">
-              <h4>Grounded Legal Corpus</h4>
-              <ul>
-                <li><span className="footer-stat">Constitution of India (503 Articles)</span></li>
-                <li><span className="footer-stat">Central Acts &amp; Statutory Codes</span></li>
-                <li><span className="footer-stat">Model Tenancy &amp; Rent Control Acts</span></li>
-                <li><span className="footer-stat">Payment of Wages &amp; Industrial Codes</span></li>
-                <li><span className="footer-stat">MSMED Act Statutory 45-Day Rule</span></li>
-              </ul>
-            </div>
           </div>
-
-          <div className="footer-bottom">
-            <p className="footer-copy">
-              &copy; 2026 Legal-Lens Project. Non-profit public interest awareness.
-            </p>
-            <div className="footer-api-pill" title="Active Legal Lens Backend API URL (override via ?api=<url>)">
-              <span className={`api-dot ${healthStatus === 'healthy' ? 'healthy' : healthStatus === 'offline' ? 'offline' : ''}`} />
-              <span>API: <code>{apiUrl}</code></span>
-              {isMixedContentUrl(apiUrl) && (
-                <span className="mixed-content-warning-pill" style={{ marginLeft: '6px', fontSize: '0.7rem' }}>
-                  ⚠️ Mixed Content
-                </span>
-              )}
-            </div>
-            <div className="footer-disclaimer-pill">
-              <Shield size={14} />
-              <span>Public Legal Literacy — Not formal attorney representation. Under Article 39A of Constitution of India.</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

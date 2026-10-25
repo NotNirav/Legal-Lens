@@ -406,6 +406,35 @@ export async function getStates(options = {}) {
 }
 
 /**
+ * GET /sources
+ * Returns all loaded legal statutes with chunk counts, consolidation dates, and statuses.
+ */
+export async function getSources(options = {}) {
+  const baseUrl = getBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout || 8000);
+
+  const signal = options.signal || controller.signal;
+
+  try {
+    const res = await fetch(`${baseUrl}/sources`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw normalizeError(err, baseUrl, err.status);
+  }
+}
+
+/**
  * POST /ask (Streaming SSE)
  * Sends question to the assembly pipeline and parses SSE events in real-time.
  * Automatically cancels any previous ongoing askStream request unless detach=true is passed.
@@ -617,6 +646,7 @@ export default {
   subscribeBaseUrl,
   getHealth,
   getStates,
+  getSources,
   askStream,
   askDocument,
   reviewAnswer,
