@@ -379,8 +379,8 @@ function generateGroundedLegalAnalysis(query, attachment, language = "en") {
 
   return {
     isBackendConnected: false,
-    sourceType: "Legal-Lens Grounded Legal Engine (Constitution & SC Corpus)",
-    statusBadge: "Grounded with Constitution of India & 1,104 Supreme Court Decisions",
+    sourceType: "Legal-Lens Grounded Legal Engine (Constitution, Central Acts & State Laws)",
+    statusBadge: "Grounded with Constitution of India, Central Acts & State Laws",
     whatThisMeans: `${langPrefix}${directAnswer}${docNote}`,
     possibleRights: specificRights,
     nextSteps: concreteNextSteps,

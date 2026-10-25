@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Globe, Sun, Moon, ArrowRight, Sparkles, 
-  ChevronDown, Check, Menu, X 
+  Globe, Sun, Moon, 
+  ChevronDown, Check, Menu, X, Scale
 } from 'lucide-react';
 import { translations } from '../data/translations';
+import { DEFAULT_INDIAN_STATES } from '../data/states';
+import { getStates } from '../lib/api';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
@@ -17,26 +19,43 @@ const LANGUAGES = [
 export default function Navbar({ 
   activeTab, 
   setActiveTab, 
-  language, 
+  language = 'en', 
   setLanguage,
-  theme = 'dark',
+  theme = 'light',
   toggleTheme,
-  hasDemoParam = false,
-  isDemoModeActive = false,
-  setIsDemoModeActive
+  selectedState = 'Maharashtra',
+  setSelectedState
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
+  const [statesList, setStatesList] = useState(DEFAULT_INDIAN_STATES);
+  const [stateSearch, setStateSearch] = useState('');
+  
   const langRef = useRef(null);
+  const stateRef = useRef(null);
   const t = translations[language] || translations.en;
 
-  const currentLangObj = LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
+  useEffect(() => {
+    let isMounted = true;
+    getStates()
+      .then((data) => {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setStatesList(data);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
-  // Close language dropdown when clicking outside
+  // Close dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (langRef.current && !langRef.current.contains(event.target)) {
         setLangDropdownOpen(false);
+      }
+      if (stateRef.current && !stateRef.current.contains(event.target)) {
+        setStateDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -49,33 +68,45 @@ export default function Navbar({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSelectLanguage = (code) => {
-    setLanguage(code);
-    setLangDropdownOpen(false);
+  const handleStateSelect = (stName) => {
+    if (setSelectedState) setSelectedState(stName);
+    localStorage.setItem('legal_lens_selected_state', stName);
+    setStateDropdownOpen(false);
+    setStateSearch('');
   };
+
+  const filteredStates = statesList.filter(s => 
+    s.jurisdiction.toLowerCase().includes(stateSearch.toLowerCase().trim())
+  );
+
+  const currentStateObj = statesList.find(
+    s => s.jurisdiction.toLowerCase() === selectedState.toLowerCase()
+  );
+  const isCovered = currentStateObj ? currentStateObj.covered : true;
 
   return (
     <header className="navbar-sticky-header">
       <nav className="main-navbar" aria-label="Main navigation">
         <div className="container navbar-container">
-          {/* Minimalist Modern Brand Logo */}
+          {/* Wordmark: serif 'Legal Lens' with 4-bar CSS accent mark */}
           <div 
             className="brand-logo" 
             role="button" 
             tabIndex={0}
             onClick={() => handleNavClick('home')}
             onKeyDown={(e) => e.key === 'Enter' && handleNavClick('home')}
-            aria-label="LegalLens Home"
+            aria-label="Legal Lens Home"
           >
-            <div className="logo-symbol-modern">
-              <span className="logo-symbol-core"></span>
-            </div>
-            <div className="logo-text-block">
-              <span className="logo-title">LegalLens<span className="logo-accent-dot">.ai</span></span>
-            </div>
+            <span className="brand-wordmark">Legal Lens</span>
+            <span className="brand-accent-mark" aria-hidden="true">
+              <span className="bar bar-red" />
+              <span className="bar bar-blue" />
+              <span className="bar bar-yellow" />
+              <span className="bar bar-pink" />
+            </span>
           </div>
 
-          {/* Desktop Navigation Links (ReactBits / shadcn inspired clean pill) */}
+          {/* Desktop Navigation Links */}
           <div className="desktop-nav-links" role="tablist">
             <button
               type="button"
@@ -88,6 +119,15 @@ export default function Navbar({
             </button>
             <button
               type="button"
+              className={`nav-link ${activeTab === 'query' ? 'active' : ''}`}
+              onClick={() => handleNavClick('query')}
+              role="tab"
+              aria-selected={activeTab === 'query'}
+            >
+              <span>{t.tabQuery || 'Counsel'}</span>
+            </button>
+            <button
+              type="button"
               className={`nav-link ${activeTab === 'insights' ? 'active' : ''}`}
               onClick={() => handleNavClick('insights')}
               role="tab"
@@ -95,37 +135,120 @@ export default function Navbar({
             >
               <span>{t.tabInsights || 'Insights'}</span>
             </button>
-            <button
-              type="button"
-              className={`nav-link nav-link-assistant ${activeTab === 'query' ? 'active' : ''}`}
-              onClick={() => handleNavClick('query')}
-              role="tab"
-              aria-selected={activeTab === 'query'}
-            >
-              <span>{t.tabQuery || 'Counsel'}</span>
-              <span className="nav-assistant-pill">26B AI</span>
-            </button>
           </div>
 
-          {/* Right Action Cluster: Theme Switcher + Language Dropdown + CTA */}
+          {/* Right cluster: State selector + Language toggle + Mode toggle */}
           <div className="nav-actions-cluster">
-            {/* Demo Mode Toggle Switch (Visible only if ?demo=1 in URL) */}
-            {hasDemoParam && (
+            {/* Header State Selector */}
+            <div className="header-state-selector-wrap" ref={stateRef}>
               <button
                 type="button"
-                className={`demo-mode-toggle-btn ${isDemoModeActive ? 'active' : ''}`}
-                onClick={() => setIsDemoModeActive && setIsDemoModeActive(!isDemoModeActive)}
-                title={isDemoModeActive ? "Demo Mode Active (Golden Questions enabled)" : "Enable Demo Mode"}
-                aria-pressed={isDemoModeActive}
+                className="header-state-trigger"
+                onClick={() => setStateDropdownOpen(prev => !prev)}
+                aria-expanded={stateDropdownOpen}
+                aria-label={`Selected jurisdiction: ${selectedState}`}
+                title="Select state jurisdiction for local law grounding"
               >
-                <span className="demo-mode-switch-track">
-                  <span className="demo-mode-switch-thumb" />
-                </span>
-                <span className="demo-mode-label">Demo Mode</span>
+                <Scale size={13} className="state-scale-icon" />
+                <span className="state-trigger-text">{selectedState}</span>
+                {!isCovered && <span className="state-central-chip">Central</span>}
+                <ChevronDown size={12} className={`chevron-icon ${stateDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-            )}
 
-            {/* Dark / Light Mode Toggle */}
+              {stateDropdownOpen && (
+                <div className="header-state-dropdown animate-popover" role="dialog" aria-label="Select state jurisdiction">
+                  <div className="state-search-wrap">
+                    <input
+                      type="text"
+                      className="state-quick-search-input"
+                      placeholder="Search state or UT..."
+                      value={stateSearch}
+                      onChange={(e) => setStateSearch(e.target.value)}
+                      autoFocus
+                      aria-label="Filter state list"
+                    />
+                  </div>
+                  <div className="state-quick-list" role="listbox">
+                    {filteredStates.map((st) => (
+                      <button
+                        key={st.jurisdiction}
+                        type="button"
+                        className={`state-quick-item ${st.jurisdiction === selectedState ? 'active' : ''}`}
+                        onClick={() => handleStateSelect(st.jurisdiction)}
+                        role="option"
+                        aria-selected={st.jurisdiction === selectedState}
+                      >
+                        <span className="state-item-name">{st.jurisdiction}</span>
+                        <span className="state-item-note">
+                          {st.covered ? 'State laws indexed' : 'Central law only'}
+                        </span>
+                        {st.jurisdiction === selectedState && (
+                          <Check size={13} className="state-check-icon" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Language Toggle: EN / हिन्दी */}
+            <div className="header-lang-toggle" role="group" aria-label="Language selector">
+              <button
+                type="button"
+                className={`lang-pill-btn ${language === 'en' ? 'active' : ''}`}
+                onClick={() => setLanguage && setLanguage('en')}
+                aria-pressed={language === 'en'}
+              >
+                EN
+              </button>
+              <span className="lang-pill-sep" aria-hidden="true">/</span>
+              <button
+                type="button"
+                className={`lang-pill-btn ${language === 'hi' ? 'active' : ''}`}
+                onClick={() => setLanguage && setLanguage('hi')}
+                aria-pressed={language === 'hi'}
+              >
+                हिन्दी
+              </button>
+            </div>
+
+            {/* Language Extended Dropdown (for Marathi, Bengali, Tamil, etc.) */}
+            <div className="header-lang-more-wrap" ref={langRef}>
+              <button
+                type="button"
+                className="btn-lang-more"
+                onClick={() => setLangDropdownOpen(prev => !prev)}
+                aria-label="More languages"
+                title="More languages"
+                aria-expanded={langDropdownOpen}
+              >
+                <Globe size={14} />
+              </button>
+
+              {langDropdownOpen && (
+                <div className="header-lang-dropdown animate-popover" role="menu">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      className={`lang-dropdown-item ${language === lang.code ? 'active' : ''}`}
+                      onClick={() => {
+                        if (setLanguage) setLanguage(lang.code);
+                        setLangDropdownOpen(false);
+                      }}
+                      role="menuitem"
+                    >
+                      <span>{lang.native}</span>
+                      <span className="lang-eng-label">({lang.label})</span>
+                      {language === lang.code && <Check size={13} className="ml-auto" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Theme Toggle Button */}
             <button
               type="button"
               className="theme-toggle-btn"
@@ -134,68 +257,13 @@ export default function Navbar({
               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             >
               {theme === 'dark' ? (
-                <Sun size={17} className="theme-icon sun-icon" />
+                <Sun size={15} className="theme-icon" />
               ) : (
-                <Moon size={17} className="theme-icon moon-icon" />
+                <Moon size={15} className="theme-icon" />
               )}
             </button>
 
-            {/* Smooth Floating Language Dropdown */}
-            <div className="language-dropdown-wrapper" ref={langRef}>
-              <button
-                type="button"
-                className={`language-trigger-btn ${langDropdownOpen ? 'is-open' : ''}`}
-                onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-                aria-haspopup="true"
-                aria-expanded={langDropdownOpen}
-                aria-label="Select interface language"
-              >
-                <Globe size={15} className="lang-globe-icon" />
-                <span className="lang-trigger-label">{currentLangObj.native}</span>
-                <ChevronDown size={14} className={`lang-chevron ${langDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {langDropdownOpen && (
-                <div className="language-popover-menu animate-popover">
-                  <div className="popover-arrow"></div>
-                  <div className="popover-header-note">Select Language</div>
-                  <div className="popover-options-list" role="menu">
-                    {LANGUAGES.map((lang) => {
-                      const isSelected = language === lang.code;
-                      return (
-                        <button
-                          key={lang.code}
-                          type="button"
-                          className={`language-option-item ${isSelected ? 'active' : ''}`}
-                          onClick={() => handleSelectLanguage(lang.code)}
-                          role="menuitem"
-                        >
-                          <div className="lang-option-text">
-                            <span className="lang-option-native">{lang.native}</span>
-                            <span className="lang-option-eng">{lang.label}</span>
-                          </div>
-                          {isSelected && <Check size={14} className="lang-check-icon" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Highlighted CTA Launch Button */}
-            <button
-              type="button"
-              className="btn btn-primary btn-sm nav-ask-cta"
-              onClick={() => handleNavClick('query')}
-              title="Launch the Gemma 4 Legal Assistant"
-            >
-              <Sparkles size={14} className="sparkle-gold" />
-              <span>Launch Assistant</span>
-              <ArrowRight size={14} />
-            </button>
-
-            {/* Mobile Hamburger Toggle */}
+            {/* Mobile menu toggle */}
             <button
               type="button"
               className="mobile-toggle-btn"
@@ -208,7 +276,7 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Mobile Flyout Menu */}
+        {/* Mobile flyout */}
         {mobileMenuOpen && (
           <div className="mobile-flyout-drawer animate-slide-down">
             <div className="container mobile-flyout-content">
@@ -221,45 +289,35 @@ export default function Navbar({
               </button>
               <button
                 type="button"
+                className={`mobile-nav-link ${activeTab === 'query' ? 'active' : ''}`}
+                onClick={() => handleNavClick('query')}
+              >
+                <span>{t.tabQuery || 'Counsel'}</span>
+              </button>
+              <button
+                type="button"
                 className={`mobile-nav-link ${activeTab === 'insights' ? 'active' : ''}`}
                 onClick={() => handleNavClick('insights')}
               >
                 <span>{t.tabInsights || 'Insights'}</span>
               </button>
-              <button
-                type="button"
-                className={`mobile-nav-link ${activeTab === 'query' ? 'active' : ''}`}
-                onClick={() => handleNavClick('query')}
-              >
-                <span>{t.tabQuery || 'Counsel'}</span>
-                <span className="nav-assistant-pill">26B AI</span>
-              </button>
 
               <div className="mobile-drawer-footer">
-                {hasDemoParam && (
-                  <div className="mobile-demo-row">
-                    <span className="mobile-demo-text">Demo Mode (Golden Questions)</span>
-                    <button
-                      type="button"
-                      className={`demo-mode-toggle-btn ${isDemoModeActive ? 'active' : ''}`}
-                      onClick={() => setIsDemoModeActive && setIsDemoModeActive(!isDemoModeActive)}
-                      aria-pressed={isDemoModeActive}
-                    >
-                      <span className="demo-mode-switch-track">
-                        <span className="demo-mode-switch-thumb" />
-                      </span>
-                      <span className="demo-mode-label">{isDemoModeActive ? 'ON' : 'OFF'}</span>
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-primary w-full"
-                  onClick={() => handleNavClick('query')}
-                >
-                  <Sparkles size={16} />
-                  <span>Launch Assistant</span>
-                </button>
+                <div className="mobile-state-picker-row">
+                  <span className="mobile-picker-label">Jurisdiction:</span>
+                  <select
+                    className="mobile-state-select"
+                    value={selectedState}
+                    onChange={(e) => handleStateSelect(e.target.value)}
+                    aria-label="Select state jurisdiction"
+                  >
+                    {statesList.map(st => (
+                      <option key={st.jurisdiction} value={st.jurisdiction}>
+                        {st.jurisdiction} {st.covered ? '' : '(Central only)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>

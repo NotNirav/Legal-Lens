@@ -103,6 +103,8 @@ export default function SafeMarkdown({ content = '', availableTags = null, onTag
     currentList = null;
   };
 
+  let isFirstParagraph = true;
+
   lines.forEach((line, lineIdx) => {
     const trimmed = line.trim();
 
@@ -151,13 +153,22 @@ export default function SafeMarkdown({ content = '', availableTags = null, onTag
       return;
     }
 
-    // Regular paragraph
+    // Regular paragraph (first paragraph becomes tinted callout)
     flushList(lineIdx);
-    elements.push(
-      <p key={`p-${lineIdx}`} className="markdown-paragraph">
-        {parseInline(trimmed, tagSet, onTagClick)}
-      </p>
-    );
+    if (isFirstParagraph) {
+      isFirstParagraph = false;
+      elements.push(
+        <div key={`callout-${lineIdx}`} className="markdown-paragraph markdown-first-callout" role="note" aria-label="Summary Answer">
+          {parseInline(trimmed, tagSet, onTagClick)}
+        </div>
+      );
+    } else {
+      elements.push(
+        <p key={`p-${lineIdx}`} className="markdown-paragraph">
+          {parseInline(trimmed, tagSet, onTagClick)}
+        </p>
+      );
+    }
   });
 
   flushList('final');

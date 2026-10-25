@@ -1,5 +1,7 @@
 # Legal Lens ⚖️🔍
 
+PPT LINK - https://docs.google.com/presentation/d/1agT6lwufgnFF9ADYXsaTVRY9Z8VOc1fO/edit?slide=id.p1#slide=id.p1
+
 > **Multilingual AI Legal Assistant & Hybrid RAG Retrieval Engine for Indian Law**  
 > Powered by Google Gemma 4, Hybrid Dense Vector + Sparse BM25 RAG, Multimodal Document Vision, and Verified Supreme Court Precedents.
 

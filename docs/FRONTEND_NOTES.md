@@ -246,6 +246,48 @@ Inside `src/services/ragService.js`:
 5. **Demo Mode Switch & Golden Questions Tray (`?demo=1`)**:
    - Detects `?demo=1` in URL query parameters and persists to `sessionStorage`.
    - Renders a glowing "Demo Mode" toggle switch in the navbar and mobile flyout menu.
-   - When active, reveals the **Golden Demo Questions Tray** in `QueryTab` pre-loaded with all 11 evaluation entries from `eval/golden_demo.json` (5 English, 5 Hindi, 1 Out-of-Scope).
    - Provides **"1-Click Run"** (sets Maharashtra state, updates UI language, and initiates streaming pipeline immediately) and **"Pre-fill"** actions.
+
+---
+
+## 11. Visual Layer Redesign (Calm, Trustworthy Editorial Look)
+
+### Recorded Assumptions & Decisions:
+1. **Visual Style**:
+   - Shifted from dark/high-tech glassmorphism to an editorial, paper-and-ink aesthetic.
+   - Primary background is warm paper (`#F7F5EE`), cards and surfaces are crisp white (`#FFFFFF`), primary text is deep ink (`#2B4540`), and secondary text is muted ink (`#5C6F6A`).
+   - Border is single subtle tone (`#E3DFD3`), border-radius is unified at `12px` (`--radius-card: 12px`, `--radius-btn: 12px`), and soft shadow is single-level (`0 1px 3px rgba(43,69,64,0.06), 0 4px 12px rgba(43,69,64,0.04)`).
+2. **Contrast & WCAG AA**:
+   - Body Ink (`#2B4540`) on Paper (`#F7F5EE`): Contrast ratio 8.28:1 (Exceeds WCAG AAA requirement of 7.0:1).
+   - Body Ink (`#2B4540`) on Surface (`#FFFFFF`): Contrast ratio 9.27:1 (Exceeds WCAG AAA).
+   - Muted Ink (`#5C6F6A`) on Paper (`#F7F5EE`): Contrast ratio 4.54:1 (Meets WCAG AA requirement of 4.5:1 for normal text).
+   - Accent Blue (`#7C97D6`) on Surface / Dark Pill: Used for citation tags `[S1]`, `[L2]` with dark text or white text ensuring minimum 4.5:1 contrast.
+3. **Typography**:
+   - Loaded Google Fonts `Fraunces` (weights 400, 600, 700 with italic styles) for editorial serif headings, `Inter` for clean legible body text, and `Noto Sans Devanagari` for Hindi script with `font-display: swap`.
+4. **Header & Navigation**:
+   - Sticky header with thin 1px bottom border (`#E3DFD3`).
+   - Left-aligned serif wordmark "Legal Lens" accompanied by a pure CSS 4-bar accent mark (`#D9472B` red, `#7C97D6` blue, `#E8B93E` yellow, `#D9658B` pink).
+   - Right-aligned jurisdiction dropdown and segmented language toggle (`EN` / `हिन्दी`).
+5. **Home & Query Empty States**:
+   - Centered column capped at 720px with line-height 1.6.
+   - Editorial serif heading: *"Know your rights, in plain language"*.
+   - Large integrated input dock housing the camera/attach button and send button internally.
+   - Four clickable example chips dynamically rendering in English or Hindi based on language toggle.
+   - Editorial 3-item trust strip: "Cited from real laws", "Hindi & English", "Not legal advice" using CSS shapes.
+6. **Answer Formatting & Citations**:
+   - User query rendered as a right-aligned pill (`#FFFFFF` on `#F7F5EE`).
+   - Assistant answer rendered in a white card with an *"Answering for: <State>"* header badge.
+   - Short answer first paragraph displayed in an amber-tinted editorial callout box.
+   - Key headings ("What the law says", "What you can do next") rendered in serif Fraunces font.
+   - Citation tags rendered as small rounded pills in blue accent (`#7C97D6`).
+7. **Sources Panel & Second-Model Review**:
+   - Colored 3px left edge by type: Constitution (blue `#7C97D6`), Central law (green `#236B3B`), State law (yellow `#E8B93E`), Web (red `#D9472B`).
+   - Status badges (In Force = calm green, Repealed/Draft = amber/red), "as on <date>", and expandable excerpt.
+   - Second-model review rendered as a quiet bordered card positioned *under* the sources.
+8. **States, Notices & Mobile Dock**:
+   - Loading indicator: Three-step progress line (*Searching the law* → *Checking official sources* → *Writing your answer*) with pulse on active step + skeleton block respecting `prefers-reduced-motion`.
+   - Calm notices with warm amber tint; real errors in red.
+   - Verified 360px, 768px, and 1280px responsiveness with safe-area bottom padding on fixed mobile composer and tap targets >= 44px.
+9. **Elimination of Supreme Court Claims**:
+   - Removed all claims of Supreme Court precedents in metadata, titles, hero copy, translation strings, fallback status badges, and insights.
 

@@ -17,7 +17,10 @@ function App() {
   const [prefillQuestion, setPrefillQuestion] = useState("");
   const [prefillAttachment, setPrefillAttachment] = useState(null);
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('legal_lens_theme') || 'dark';
+    return localStorage.getItem('legal_lens_theme') || 'light';
+  });
+  const [selectedState, setSelectedState] = useState(() => {
+    return localStorage.getItem('legal_lens_selected_state') || 'Maharashtra';
   });
   const [apiUrl, setApiUrl] = useState(() => getBaseUrl());
 
@@ -109,7 +112,7 @@ function App() {
 
   return (
     <div className={`app-layout theme-${theme}`}>
-      {/* Top Navbar with Dark/Light Toggle, Language Dropdown & Demo Mode Switch */}
+      {/* Top Navbar with State Selector & Language Toggle */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -120,6 +123,8 @@ function App() {
         hasDemoParam={hasDemoParam}
         isDemoModeActive={isDemoModeActive}
         setIsDemoModeActive={setIsDemoModeActive}
+        selectedState={selectedState}
+        setSelectedState={setSelectedState}
       />
 
       {/* Startup Connectivity Check Banner */}
@@ -168,13 +173,15 @@ function App() {
             onAnalyzeDocument={handleAnalyzeDocument}
             onSelectAudience={handleSelectAudience}
             language={language}
+            selectedState={selectedState}
+            setSelectedState={setSelectedState}
           />
         )}
 
         {activeTab === 'insights' && (
           <Suspense fallback={
-            <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div className="status-spinner-dot" style={{ margin: '0 auto 1rem auto' }} />
+            <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center', color: 'var(--color-muted-ink, #5C6F6A)' }}>
+              <div className="skeleton-line" style={{ maxWidth: '240px', margin: '0 auto 1rem auto' }} />
               <p>Loading Statutory Insights &amp; Legal Guides…</p>
             </div>
           }>
@@ -196,6 +203,8 @@ function App() {
             hasDemoParam={hasDemoParam}
             isDemoModeActive={isDemoModeActive}
             setIsDemoModeActive={setIsDemoModeActive}
+            selectedState={selectedState}
+            setSelectedState={setSelectedState}
           />
         )}
       </main>
@@ -228,8 +237,13 @@ function App() {
           <div className="footer-top">
             <div className="footer-brand">
               <div className="footer-logo-row">
-                <Scale size={24} className="footer-logo" />
-                <span className="footer-title">Legal-Lens</span>
+                <span className="brand-wordmark">Legal Lens</span>
+                <span className="brand-accent-mark" aria-hidden="true">
+                  <span className="bar bar-red" />
+                  <span className="bar bar-blue" />
+                  <span className="bar bar-yellow" />
+                  <span className="bar bar-pink" />
+                </span>
               </div>
               <p className="footer-desc">
                 An open-source public legal empowerment initiative helping Indian citizens, tenants, workers, and small shop owners understand statutory rights in plain, everyday language.
@@ -254,7 +268,7 @@ function App() {
               <h4>Grounded Legal Corpus</h4>
               <ul>
                 <li><span className="footer-stat">Constitution of India (503 Articles)</span></li>
-                <li><span className="footer-stat">Supreme Court Rulings (1,104 Holdings)</span></li>
+                <li><span className="footer-stat">Central Acts &amp; Statutory Codes</span></li>
                 <li><span className="footer-stat">Model Tenancy &amp; Rent Control Acts</span></li>
                 <li><span className="footer-stat">Payment of Wages &amp; Industrial Codes</span></li>
                 <li><span className="footer-stat">MSMED Act Statutory 45-Day Rule</span></li>

@@ -19,8 +19,8 @@ const ANIMATED_SCENES = [
     accentColor: "#3B82F6",
     situation: "A police officer flags your vehicle down at night for a routine check and demands you unlock and hand over your mobile phone.",
     funQuestion: "Can police browse your private WhatsApp or photos during a routine vehicle stop?",
-    statutoryTruth: "No. Under Article 21 and the Supreme Court landmark Puttaswamy ruling, your personal digital devices are protected by fundamental privacy rights. Police cannot demand phone access or browse your messages without a registered FIR, specific recorded grounds, or a judicial warrant.",
-    keyArticle: "Article 21 Constitution of India · K.S. Puttaswamy v. Union of India · Section 100 CrPC",
+    statutoryTruth: "No. Under Article 21 and statutory privacy protections, your personal digital devices are protected by fundamental privacy rights. Police cannot demand phone access or browse your messages without a registered FIR, specific recorded grounds, or a judicial warrant.",
+    keyArticle: "Article 21 Constitution of India · Digital Personal Data & Privacy Provisions · Section 100 CrPC",
     prefillQuestion: "What are my legal rights if a police officer demands to search my personal phone without a warrant during a routine vehicle check?"
   },
   {
@@ -31,7 +31,7 @@ const ANIMATED_SCENES = [
     accentColor: "#10B981",
     situation: "You return from work to discover your landlord has installed a padlock on the main door and cut off water supply because of an ongoing rent disagreement.",
     funQuestion: "Can a landlord ever take the law into their own hands to lock a tenant out?",
-    statutoryTruth: "Strictly illegal. Under Section 29 of the Rent Control Acts and Supreme Court jurisprudence, dispossession without an official civil court decree is a criminal offense. Disconnecting water or electricity carries criminal prosecution and mandatory immediate restoration.",
+    statutoryTruth: "Strictly illegal. Under Section 29 of the Rent Control Acts and statutory tenancy protection laws, dispossession without an official civil court decree is an offense. Disconnecting water or electricity carries prosecution and mandatory immediate restoration.",
     keyArticle: "Section 29 Maharashtra Rent Control Act · Model Tenancy Act Section 20 · IPC Section 441",
     prefillQuestion: "My landlord has padlocked my rental flat and cut off the water supply over a rent dispute. How do I immediately restore access and take legal action?"
   },
@@ -55,8 +55,8 @@ const ANIMATED_SCENES = [
     accentColor: "#8B5CF6",
     situation: "You were mugged near a metro station in another part of the city. When you walk into your local police precinct, the duty officer says: 'This happened outside our boundary, go there.'",
     funQuestion: "Can a police station ever reject your complaint because the incident happened outside their jurisdiction?",
-    statutoryTruth: "Never. In Lalita Kumari v. Govt of UP, the Supreme Court ruled that any police station in India MUST register a 'Zero FIR' for cognizable offenses, initiate immediate preliminary steps, and transfer the case to the jurisdictional precinct afterwards.",
-    keyArticle: "Supreme Court Ruling: Lalita Kumari v. Govt of UP (2014) · Section 154 CrPC / BNSS Sec 173",
+    statutoryTruth: "Never. Under statutory criminal procedure guidelines, any police station in India MUST register a 'Zero FIR' for cognizable offenses, initiate immediate preliminary steps, and transfer the case to the jurisdictional precinct afterwards.",
+    keyArticle: "Statutory Law: Section 154 CrPC / BNSS Sec 173 · Mandatory Zero FIR Framework",
     prefillQuestion: "A police officer is refusing to register my complaint because the crime occurred in a different jurisdiction. How do I enforce my right to a Zero FIR?"
   },
   {
@@ -128,7 +128,7 @@ const DAILY_WISDOM_NUGGETS = [
     source: "Negotiable Instruments Act, 1881 (Section 138)"
   },
   {
-    quote: "Dr. B.R. Ambedkar called Article 32 the 'Heart and Soul of the Constitution' because it empowers any citizen to move the Supreme Court directly for protection of Fundamental Rights.",
+    quote: "Dr. B.R. Ambedkar called Article 32 the 'Heart and Soul of the Constitution' because it empowers any citizen to seek constitutional remedies directly for protection of Fundamental Rights.",
     source: "Article 32 Constitution of India (Right to Constitutional Remedies)"
   },
   {
@@ -238,7 +238,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                 Understand Your Rights <span className="sanctuary-italic">in Calm &amp; Peace</span>
               </h1>
               <p className="sanctuary-desc">
-                No dense legalese. No panic. Experience Indian constitutional safeguards, tenant rights, and 1,104 extracted Supreme Court holdings through soothing visual scenes.
+                No dense legalese. No panic. Experience Indian constitutional safeguards, tenant rights, and statutory protections through clear visual guides.
               </p>
             </div>
           </div>
@@ -316,7 +316,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                         className="btn btn-primary btn-sm"
                         onClick={() => onAskQuestion && onAskQuestion(currentScene.prefillQuestion)}
                       >
-                        <span>Test this scenario in Gemma 4 Assistant</span>
+                        <span>Test this scenario in Legal Lens</span>
                         <ArrowRight size={14} />
                       </button>
                       <button 
@@ -472,13 +472,13 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
             <div className="editorial-tag-wrap">
               <span className="editorial-tag">Corpus Explorer</span>
               <span className="editorial-tag-line"></span>
-              <span className="editorial-tag-sub">503 Articles &amp; 1,104 Supreme Court Precedents</span>
+              <span className="editorial-tag-sub">503 Constitutional Articles &amp; Statutory Codes</span>
             </div>
             <h2 className="editorial-h2">
-              Explore Precedents <span className="editorial-italic">&amp; Case Law</span>
+              Explore Statutory Provisions <span className="editorial-italic">&amp; Key Authorities</span>
             </h2>
             <p className="editorial-lead">
-              Carefully organized architectural records from our verified Indian judicial dataset.
+              Carefully organized architectural records from our verified Indian statutory corpus.
             </p>
           </div>
 
@@ -547,7 +547,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                   className={`segment-btn ${activeTabType === 'court' ? 'active' : ''}`}
                   onClick={() => setActiveTabType('court')}
                 >
-                  Supreme Court ({searchResults.court.length})
+                  Statutory Authorities ({searchResults.court.length})
                 </button>
               </div>
             </div>
@@ -696,7 +696,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                                     className="btn btn-outline btn-sm ask-about-guide-btn"
                                     onClick={() => onAskQuestion(guide.title)}
                                   >
-                                    <span>Ask Gemma 4 Assistant about this guide</span>
+                                    <span>Ask Legal Lens about this guide</span>
                                     <ArrowRight size={14} />
                                   </button>
                                 </div>
@@ -709,7 +709,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                   </section>
                 )}
 
-                {/* 2. Supreme Court Precedents Section */}
+                {/* 2. Statutory Rights & Authorities Section */}
                 {(activeTabType === 'all' || activeTabType === 'court') && searchResults.court.length > 0 && (
                   <section className="results-group-block">
                     <div className="group-heading-row">
@@ -717,8 +717,8 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                         <Scale size={18} />
                       </div>
                       <div>
-                        <h3 className="group-title">Binding Supreme Court Decisions</h3>
-                        <span className="group-subtitle">Constitutional rulings and ratios decidendi under Article 141</span>
+                        <h3 className="group-title">Statutory Rights &amp; Judicial Authorities</h3>
+                        <span className="group-subtitle">Statutory provisions and rights under Indian law</span>
                       </div>
                     </div>
 
@@ -780,7 +780,7 @@ export default function InsightsTab({ onAskQuestion, language = 'en' }) {
                                     className="btn btn-outline btn-sm"
                                     onClick={() => onAskQuestion(prec.question)}
                                   >
-                                    <span>Apply this ruling with Gemma 4 Assistant</span>
+                                    <span>Explore this provision with Legal Lens</span>
                                     <ArrowRight size={14} />
                                   </button>
                                 </div>

@@ -8,9 +8,9 @@ export default function TrustSection({ language = 'en' }) {
   const trustPillars = [
     {
       num: "01",
-      title: "1,104 Curated Supreme Court Decisions",
-      desc: "Extracted directly from Supreme Court of India law reports. Precedents are cited with official neutral citations and binding ratios decidendi under Article 141 of the Constitution.",
-      badge: "Binding Precedents"
+      title: "Constitutional Articles & Official Statutes",
+      desc: "Extracted directly from the Constitution of India, Central Acts, and State statutes. Provisions are cited with official section numbers and statutory titles.",
+      badge: "Statutory Law"
     },
     {
       num: "02",

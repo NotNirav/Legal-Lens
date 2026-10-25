@@ -70,7 +70,7 @@ export default function AudienceSection({ onSelectAudience }) {
 
                 {/* Card Action Link */}
                 <div className="pillar-action-row">
-                  <span className="pillar-action-label">Analyze Rights with Gemma 4</span>
+                  <span className="pillar-action-label">Analyze rights with Legal Lens</span>
                   <div className="pillar-action-arrow">
                     <ArrowRight size={14} />
                   </div>

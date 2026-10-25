@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
-  Search, ArrowRight, Sparkles, UploadCloud 
+  ArrowRight, Paperclip, Scale, ChevronDown, Check, FileText, X
 } from 'lucide-react';
 import AudienceSection from './AudienceSection';
 import SampleAnswerPreview from './SampleAnswerPreview';
 import FaqSection from './FaqSection';
 import { translations } from '../data/translations';
+import { DEFAULT_INDIAN_STATES } from '../data/states';
 
-const HERO_QUICK_PROMPTS = [
+const EXAMPLE_QUESTIONS_EN = [
   "Can my landlord deduct my deposit without repair receipts?",
   "Company delayed my salary by 2 months — how to recover?",
-  "Police refusing to register stolen vehicle FIR",
-  "MSME 45-day payment recovery rule"
+  "Can police refuse to file an FIR for a stolen phone or bike?",
+  "What is the 45-day payment rule for small businesses and MSMEs?"
+];
+
+const EXAMPLE_QUESTIONS_HI = [
+  "क्या मकान मालिक बिना बिल दिखाए सिक्योरिटी डिपॉजिट काट सकता है?",
+  "कंपनी ने 2 महीने से सैलरी रोकी है — पैसे कैसे वापस पाएं?",
+  "क्या पुलिस चोरी की शिकायत पर FIR दर्ज करने से मना कर सकती है?",
+  "छोटे व्यापारियों और MSME के लिए 45 दिन का भुगतान नियम क्या है?"
 ];
 
 export default function HomeTab({ 
@@ -19,15 +27,24 @@ export default function HomeTab({
   onAskQuestion, 
   onAnalyzeDocument, 
   onSelectAudience, 
-  language = 'en' 
+  language = 'en',
+  selectedState = 'Maharashtra',
+  setSelectedState
 }) {
   const t = translations[language] || translations.en;
   const [heroInput, setHeroInput] = useState("");
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [isStateOpen, setIsStateOpen] = useState(false);
+  const [attachment, setAttachment] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const exampleQuestions = language === 'hi' ? EXAMPLE_QUESTIONS_HI : EXAMPLE_QUESTIONS_EN;
 
   const handleHeroSubmit = (e) => {
-    e.preventDefault();
-    if (heroInput.trim()) {
+    if (e) e.preventDefault();
+    if (heroInput.trim() || attachment) {
+      if (attachment && onAnalyzeDocument) {
+        onAnalyzeDocument(attachment);
+      }
       if (onAskQuestion) {
         onAskQuestion(heroInput.trim());
       } else {
@@ -44,188 +61,228 @@ export default function HomeTab({
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files && files[0] && onAnalyzeDocument) {
-      const f = files[0];
-      onAnalyzeDocument({
-        rawFile: f,
-        name: f.name,
-        size: (f.size / 1024).toFixed(1) + ' KB',
-        type: f.type,
-        detectedType: f.name.toLowerCase().includes('notice') ? 'Legal Notice' : 'Document'
-      });
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const fileObj = {
+        rawFile: file,
+        name: file.name,
+        size: (file.size / 1024).toFixed(1) + ' KB',
+        type: file.type,
+        detectedType: file.name.toLowerCase().includes('notice') ? 'Legal Notice' : 'Document'
+      };
+      setAttachment(fileObj);
     }
   };
 
-  const handleFileSelect = (e) => {
-    const files = e.target.files;
-    if (files && files[0] && onAnalyzeDocument) {
-      const f = files[0];
-      onAnalyzeDocument({
-        rawFile: f,
-        name: f.name,
-        size: (f.size / 1024).toFixed(1) + ' KB',
-        type: f.type,
-        detectedType: f.name.toLowerCase().includes('notice') ? 'Legal Notice' : 'Document'
-      });
-    }
+  const handleStateSelect = (stName) => {
+    if (setSelectedState) setSelectedState(stName);
+    localStorage.setItem('legal_lens_selected_state', stName);
+    setIsStateOpen(false);
   };
 
   return (
-    <div className="modern-home-page">
-      {/* Immersive Cinematic Hero Viewport */}
-      <section className="hero-cinematic-viewport">
-        {/* Background Visual Backdrop with Ambient Gradient */}
-        <div className="hero-backdrop-container">
-          <img 
-            src="/hero_gemma.jpg" 
-            alt="Constitutional Justice Backdrop" 
-            className="hero-backdrop-image"
-          />
-          <div className="hero-backdrop-vignette"></div>
-        </div>
-
-        {/* Hero Content Layer Over the Viewport */}
-        <div className="container hero-viewport-content">
-          <div className="hero-badge-pill">
-            <Sparkles size={14} className="sparkle-gold" />
-            <span>Google Gemma 4 (26B-A4B-IT) · Zero-Hallucination Legal RAG</span>
+    <div className="editorial-home-page">
+      {/* Centered Editorial Hero Section (Max-Width 720px Column) */}
+      <section className="editorial-hero-section">
+        <div className="chat-centered-column">
+          {/* Header Mark */}
+          <div className="hero-mark-row">
+            <span className="brand-accent-mark" aria-hidden="true">
+              <span className="bar bar-red" />
+              <span className="bar bar-blue" />
+              <span className="bar bar-yellow" />
+              <span className="bar bar-pink" />
+            </span>
+            <span className="hero-eyebrow">Public Legal Awareness</span>
           </div>
 
-          <h1 className="hero-cinema-headline">
-            Know Your Rights.<br />
-            <span className="headline-gradient">In Plain Words. Backed by Law.</span>
+          {/* Editorial Headline & One-Line Subtitle */}
+          <h1 className="hero-editorial-headline">
+            {language === 'hi' ? 'अपने अधिकार जानें, सरल भाषा में' : 'Know your rights, in plain language'}
           </h1>
-
-          <p className="hero-cinema-sub">
-            Translating 503 Constitutional Articles, 1,104 Supreme Court landmark holdings, and Indian tenancy &amp; labor codes into crystal-clear, everyday action.
+          <p className="hero-editorial-sub">
+            {language === 'hi'
+              ? 'भारतीय संविधान, केंद्रीय अधिनियम और राज्य कानूनों से प्रमाणित कानूनी जानकारी।'
+              : 'A plain-language guide to your legal rights, cited from the Constitution, central acts and state laws.'}
           </p>
 
-          {/* Central Interactive Prompt & File Dock */}
-          <div className="hero-interactive-dock">
-            <form onSubmit={handleHeroSubmit} className="dock-search-form">
-              <div className="dock-input-inner">
-                <Search size={20} className="dock-search-icon" />
+          {/* Large Input Dock with Send, Attach & State Selector */}
+          <div className="hero-dock-card">
+            <form onSubmit={handleHeroSubmit} className="hero-dock-form">
+              {attachment && (
+                <div className="dock-staged-attachment">
+                  <FileText size={14} className="text-blue" />
+                  <span className="dock-attachment-name">{attachment.name}</span>
+                  <button 
+                    type="button" 
+                    className="dock-remove-attachment" 
+                    onClick={() => setAttachment(null)}
+                    aria-label="Remove attached document"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+
+              <div className="hero-dock-input-row">
                 <input
                   type="text"
-                  className="dock-text-input"
-                  placeholder={t.heroInputPlaceholder || "Describe your situation (e.g. 'Can my landlord lock me out without notice?')"}
+                  className="hero-dock-input"
+                  placeholder={
+                    language === 'hi'
+                      ? 'अपनी कानूनी समस्या लिखें (जैसे: क्या मकान मालिक बिना नोटिस के निकाल सकता है?)'
+                      : "Ask in plain language (e.g. 'Can my landlord lock me out without notice?')"
+                  }
                   value={heroInput}
                   onChange={(e) => setHeroInput(e.target.value)}
                   aria-label="Describe your legal situation"
                 />
-                <button 
-                  type="submit" 
-                  className="dock-submit-btn"
-                  disabled={!heroInput.trim()}
-                  aria-label="Submit Question"
+
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*,.pdf,.txt"
+                  style={{ display: 'none' }}
+                  id="hero-file-input"
+                />
+
+                {/* Attach Button inside the input */}
+                <button
+                  type="button"
+                  className={`dock-tool-btn dock-attach-btn ${attachment ? 'has-file' : ''}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach document or notice image (JPG, PNG, PDF)"
+                  aria-label="Attach document or notice photo"
                 >
-                  <span>{t.askButton || "Ask AI"}</span>
-                  <ArrowRight size={16} />
+                  <Paperclip size={18} />
+                </button>
+
+                {/* Send Button inside the input */}
+                <button
+                  type="submit"
+                  className="dock-tool-btn dock-send-btn"
+                  disabled={!heroInput.trim() && !attachment}
+                  aria-label="Send inquiry"
+                  title="Send inquiry"
+                >
+                  <ArrowRight size={18} />
                 </button>
               </div>
-            </form>
 
-            {/* Drag & Drop Document Dropstrip */}
-            <div 
-              className={`dock-dropzone-bar ${isDragOver ? 'drag-active' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={handleDrop}
-            >
-              <input 
-                type="file" 
-                id="hero-file-drop" 
-                className="hidden-file-input" 
-                onChange={handleFileSelect}
-                accept="image/*,.pdf,.txt" 
-              />
-              <label htmlFor="hero-file-drop" className="dropzone-label">
-                <UploadCloud size={16} className="dropzone-icon" />
-                <span>
-                  Drop an <strong>eviction notice, agreement, or invoice</strong> to scan with Gemma 4 Vision
-                </span>
-                <span className="dropzone-browse">Browse file</span>
-              </label>
-            </div>
-
-            {/* Fast Prompt Chips */}
-            <div className="dock-prompt-chips">
-              <span className="prompt-chips-label">Popular inquiries:</span>
-              <div className="prompt-chips-tray">
-                {HERO_QUICK_PROMPTS.map((prompt, idx) => (
+              {/* State Selector Next to Input */}
+              <div className="hero-dock-bottom-bar">
+                <div className="dock-state-picker-wrap">
                   <button
-                    key={idx}
                     type="button"
-                    className="dock-chip-item"
-                    onClick={() => handlePromptClick(prompt)}
+                    className="dock-state-trigger"
+                    onClick={() => setIsStateOpen(!isStateOpen)}
+                    aria-expanded={isStateOpen}
+                    aria-label={`Select jurisdiction, currently ${selectedState}`}
                   >
-                    <span>{prompt}</span>
+                    <Scale size={13} className="text-muted" />
+                    <span>Jurisdiction: <strong>{selectedState}</strong></span>
+                    <ChevronDown size={12} className={`chevron ${isStateOpen ? 'rotate-180' : ''}`} />
                   </button>
-                ))}
+
+                  {isStateOpen && (
+                    <div className="dock-state-dropdown animate-popover" role="listbox">
+                      {DEFAULT_INDIAN_STATES.map((st) => (
+                        <button
+                          key={st.jurisdiction}
+                          type="button"
+                          className={`dock-state-item ${st.jurisdiction === selectedState ? 'active' : ''}`}
+                          onClick={() => handleStateSelect(st.jurisdiction)}
+                          role="option"
+                          aria-selected={st.jurisdiction === selectedState}
+                        >
+                          <span>{st.jurisdiction}</span>
+                          {st.jurisdiction === selectedState && <Check size={12} className="ml-auto" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <span className="dock-state-hint">
+                  Local state rules &amp; central acts applied
+                </span>
               </div>
+            </form>
+          </div>
+
+          {/* 4 Clickable Example-Question Chips (EN or HI according to language) */}
+          <div className="hero-chips-container" role="region" aria-label="Example legal inquiries">
+            <span className="hero-chips-label">
+              {language === 'hi' ? 'सुझाए गए कानूनी विषय:' : 'Common inquiries:'}
+            </span>
+            <div className="hero-chips-cluster">
+              {exampleQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className="editorial-chip-btn"
+                  onClick={() => handlePromptClick(q)}
+                  aria-label={`Ask: ${q}`}
+                >
+                  <span>{q}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Minimalist Trust Metrics Bar */}
-          <div className="hero-metrics-bar">
-            <div className="metric-item">
-              <strong className="metric-val">1,104</strong>
-              <span className="metric-lbl">Supreme Court Holdings</span>
+          {/* Trust Strip with 3 Small Items (No stock illustrations; using CSS shapes or 4-bar mark) */}
+          <div className="hero-trust-strip" aria-label="Trust indicators">
+            <div className="trust-strip-item">
+              <span className="css-shape-mark shape-square" aria-hidden="true" />
+              <span>Cited from real laws</span>
             </div>
-            <div className="metric-divider"></div>
-            <div className="metric-item">
-              <strong className="metric-val">503</strong>
-              <span className="metric-lbl">Constitutional Articles</span>
+            <div className="trust-strip-sep" aria-hidden="true">·</div>
+            <div className="trust-strip-item">
+              <span className="css-shape-mark shape-circle" aria-hidden="true" />
+              <span>Hindi &amp; English</span>
             </div>
-            <div className="metric-divider"></div>
-            <div className="metric-item">
-              <strong className="metric-val">100% Free</strong>
-              <span className="metric-lbl">Article 39A Public Aid</span>
-            </div>
-            <div className="metric-divider"></div>
-            <div className="metric-item">
-              <strong className="metric-val">0 Jargon</strong>
-              <span className="metric-lbl">Everyday Citizen Language</span>
+            <div className="trust-strip-sep" aria-hidden="true">·</div>
+            <div className="trust-strip-item">
+              <span className="css-shape-mark shape-triangle" aria-hidden="true" />
+              <span>Not legal advice</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Target Audiences Bento Grid */}
+      {/* Target Audiences Section */}
       <AudienceSection 
         onSelectAudience={onSelectAudience}
         language={language}
       />
 
-      {/* Gemma 4 Grounded Engine Pipeline (Clean single strip) */}
+      {/* How the Grounded Assistant Works */}
       <section className="engine-pipeline-section">
         <div className="container">
           <div className="pipeline-header-center">
-            <span className="section-pill-tag">Precision Engine</span>
-            <h2 className="pipeline-title">Why Gemma 4 + Grounded RAG?</h2>
+            <h2 className="pipeline-title">How Legal Lens Explains Your Rights</h2>
             <p className="pipeline-desc">
-              Generic chatbots hallucinate fake court cases and fabricated fines. Legal-Lens anchors every response to verified Indian statutes.
+              Grounded in the Constitution of India, Central Acts, and Model Codes — explained in everyday language without expensive attorney retainers.
             </p>
           </div>
 
           <div className="pipeline-cards-row">
             <div className="pipeline-card">
               <div className="pipeline-card-num">01</div>
-              <h3 className="pipeline-card-heading">Verified Evidence Bounds</h3>
+              <h3 className="pipeline-card-heading">Verified Statutory Provisions</h3>
               <p className="pipeline-card-text">
-                Restricted to explicit statutory tags ([L1], [L2]). If a specific detail is not in the legal corpus, Gemma 4 states so rather than making up answers.
+                Every right is verified against statutory provisions like the Transfer of Property Act, Payment of Wages Act, and Consumer Protection Act with exact section citations.
               </p>
             </div>
 
             <div className="pipeline-card">
               <div className="pipeline-card-num">02</div>
-              <h3 className="pipeline-card-heading">Multimodal Notice Vision</h3>
+              <h3 className="pipeline-card-heading">Plain Language Synthesis</h3>
               <p className="pipeline-card-text">
-                Accepts document photos and PDFs. Gemma 4 reads lease clauses, eviction dates, and salary deductions to check statutory notice compliance.
+                Complex legal definitions and procedural rules are translated into clear, reassuring language that any citizen, tenant, or worker can act on immediately.
               </p>
             </div>
 
@@ -233,7 +290,7 @@ export default function HomeTab({
               <div className="pipeline-card-num">03</div>
               <h3 className="pipeline-card-heading">Direct Government Channels</h3>
               <p className="pipeline-card-text">
-                Provides direct, actionable links to official redressal portals like NALSA (15100), Consumer Grievance (1915), and MSME Samadhaan.
+                Provides direct phone numbers and official grievance portal links for NALSA Free Legal Aid (15100), Consumer Redressal (1915), and MSME Samadhaan.
               </p>
             </div>
           </div>
@@ -259,7 +316,7 @@ export default function HomeTab({
             <div className="bottom-launch-copy">
               <h2 className="bottom-launch-title">Have a specific legal notice or question?</h2>
               <p className="bottom-launch-desc">
-                Get an instant, structured breakdown backed by constitutional articles and Supreme Court holdings.
+                Get an instant, structured breakdown backed by the Constitution, central acts, and state laws.
               </p>
             </div>
             <button
@@ -267,9 +324,8 @@ export default function HomeTab({
               className="btn btn-primary btn-lg"
               onClick={() => setActiveTab('query')}
             >
-              <Sparkles size={18} />
-              <span>Launch Gemma 4 Counsel</span>
-              <ArrowRight size={18} />
+              <span>Ask Legal Lens</span>
+              <ArrowRight size={16} />
             </button>
           </div>
         </div>

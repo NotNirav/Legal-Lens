@@ -24,9 +24,9 @@ const SAMPLE_SCENARIOS = [
       ],
       supportingSources: [
         {
-          title: "Supreme Court Landmark",
-          citation: "Bishandas v. State of Punjab, AIR 1961 SC 1570",
-          summary: "The Supreme Court held that state authorities or private landlords cannot take forcible possession without due process of law, even against unauthorized occupants."
+          title: "Constitutional Safeguard",
+          citation: "Constitution of India, Article 300A & Article 21",
+          summary: "Protects against forcible dispossession or arbitrary deprivation of tenancy without due process of law."
         },
         {
           title: "Transfer of Property Act, 1882",
@@ -59,9 +59,9 @@ const SAMPLE_SCENARIOS = [
       ],
       supportingSources: [
         {
-          title: "Supreme Court Landmark",
-          citation: "People's Union for Democratic Rights v. Union of India, (1982) 3 SCC 235",
-          summary: "The Supreme Court ruled that paying less than statutory wages or withholding wages violates Article 23 of the Constitution (prohibition of forced labor)."
+          title: "Constitutional Protection",
+          citation: "Constitution of India, Article 23",
+          summary: "Guarantees statutory remuneration for labor and prohibits arbitrary non-payment of earned wages."
         },
         {
           title: "Payment of Wages Act, 1936",
@@ -94,9 +94,9 @@ const SAMPLE_SCENARIOS = [
       ],
       supportingSources: [
         {
-          title: "Supreme Court Landmark",
-          citation: "Lucknow Development Authority v. M.K. Gupta, (1994) 1 SCC 243",
-          summary: "The Supreme Court established that statutory authorities and commercial service providers are strictly accountable for deficiency in service and arbitrary customer harassment."
+          title: "Statutory Liability Provision",
+          citation: "Consumer Protection Act, 2019, Section 84",
+          summary: "Establishes statutory product liability accountability for commercial sellers and marketplaces for defect in goods."
         },
         {
           title: "Consumer Protection Act, 2019",
